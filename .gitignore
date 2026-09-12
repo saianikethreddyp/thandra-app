@@ -11,3 +11,4 @@ npm-debug.*
 veda/
 .idea/
 .DS_Store
+.env

@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "DriveSync",
-    "slug": "drivesync",
+    "name": "Thandra",
+    "slug": "thandra-cars",
+    "scheme": "thandra",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,19 +13,21 @@
       "backgroundColor": "#121212"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.thandra.selfdrive",
+      "infoPlist": {
+        "NSContactsUsageDescription": "Thandra requires access to contacts to pre-fill emergency contact information and ensure seamless bookings."
+      }
     },
     "android": {
+      "package": "com.thandra.selfdrive",
+      "permissions": [
+        "READ_CONTACTS"
+      ],
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
-      "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
+        "backgroundColor": "#121212",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      }
     },
     "plugins": [
       "@react-native-community/datetimepicker",
