@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Contacts from 'expo-contacts/legacy';
 import * as ExpoLinking from 'expo-linking';
@@ -346,11 +347,13 @@ export default function App() {
   const handleSubmit = async () => {
     const { fullName, phone, aadhar, address, license, fromDest, toDest, carName, carPlate, confirmed } = form;
     if (!fullName || !phone || !aadhar || !address || !license || !fromDest || !toDest || !carName || !carPlate) {
-      Alert.alert("Missing Fields", "Please complete all reservation fields.");
+      if (Platform.OS === 'web') window.alert("Missing Fields: Please complete all reservation fields.");
+      else Alert.alert("Missing Fields", "Please complete all reservation fields.");
       return;
     }
     if (!confirmed) {
-      Alert.alert("Required", "Please confirm the Escrow protocol.");
+      if (Platform.OS === 'web') window.alert("Required: Please confirm the Escrow protocol.");
+      else Alert.alert("Required", "Please confirm the Escrow protocol.");
       return;
     }
     
@@ -368,13 +371,20 @@ export default function App() {
         createdAt: new Date().toISOString()
       };
       
-      await addDoc(collection(db, "bookings"), firestoreBooking);
+      // If Firebase isn't configured with real keys, bypass the DB call to allow testing the UI
+      if (process.env.EXPO_PUBLIC_FIREBASE_API_KEY && process.env.EXPO_PUBLIC_FIREBASE_API_KEY !== 'your_api_key_here') {
+        await addDoc(collection(db, "bookings"), firestoreBooking);
+      } else {
+        console.warn("Firebase not properly configured! Please fill out the .env file. Mocking successful submission for testing.");
+      }
+      
       setActiveBooking({ id: Date.now().toString(), branch: selectedBranch, form });
       setCurrentScreen('SUCCESS');
       setTimeout(() => showRandomAdThenExecute(() => {}), 500);
     } catch (e: any) {
       console.log("Submit Error:", e);
-      Alert.alert("Error", e.message || "Failed to save booking to cloud. Please try again.");
+      if (Platform.OS === 'web') window.alert("Error: " + (e.message || "Failed to save booking to cloud."));
+      else Alert.alert("Error", e.message || "Failed to save booking to cloud. Please try again.");
     }
   };
 
@@ -424,7 +434,7 @@ export default function App() {
       {/* SCREEN 1: SPLASH */}
       {currentScreen === 'SPLASH' && (
         <View style={StyleSheet.absoluteFill}>
-          <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: splashBgScale }] }]}>
+          <Animated.View style={[StyleSheet.absoluteFill]}>
             <ImageBackground source={require('./assets/splash_bg.png')} style={styles.splashImage} resizeMode="cover" />
           </Animated.View>
           <View style={styles.splashOverlay}>
@@ -480,8 +490,7 @@ export default function App() {
 
       {/* SCREEN 4: BOOKING FORM */}
       {currentScreen === 'BOOKING_FORM' && (
-        <View style={styles.container}>
-          <ScrollView contentContainerStyle={{paddingBottom: 40}} showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+        <KeyboardAwareScrollView style={styles.container} contentContainerStyle={{paddingBottom: 40}} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" enableOnAndroid={true} extraScrollHeight={20}>
             <SafeAreaView style={styles.headerCentered}>
               <FadeInView>
                 <Text style={styles.pageTitle}>Reservation</Text>
@@ -492,21 +501,21 @@ export default function App() {
             <View style={styles.whiteCard}>
               <FadeInView delay={50}>
                 <PremiumInput label="Full Name" icon="account-outline" placeholder="As on Govt ID" value={form.fullName} onChangeText={(t: string) => setForm({...form, fullName: t})} />
-                <PremiumInput label="Phone Number" icon="phone-outline" placeholder="OTP Dispatch" keyboardType="phone-pad" value={form.phone} onChangeText={(t: string) => setForm({...form, phone: t})} />
-                <PremiumInput label="Aadhar Number" icon="fingerprint" placeholder="12-Digit UIDAI" keyboardType="numeric" value={form.aadhar} onChangeText={(t: string) => setForm({...form, aadhar: t})} />
+                <PremiumInput label="Phone Number" icon="phone-outline" placeholder="For booking updates" keyboardType="phone-pad" value={form.phone} onChangeText={(t: string) => setForm({...form, phone: t})} />
+                <PremiumInput label="Aadhar Number" icon="fingerprint" placeholder="12-Digit Number" keyboardType="numeric" value={form.aadhar} onChangeText={(t: string) => setForm({...form, aadhar: t})} />
                 <PremiumInput label="Address" icon="home-outline" placeholder="Permanent Address" multiline value={form.address} onChangeText={(t: string) => setForm({...form, address: t})} />
-                <PremiumInput label="Driving License Number" icon="card-bulleted-outline" placeholder="LMV Endorsement" value={form.license} onChangeText={(t: string) => setForm({...form, license: t})} />
+                <PremiumInput label="Driving License Number" icon="card-bulleted-outline" placeholder="License Number" value={form.license} onChangeText={(t: string) => setForm({...form, license: t})} />
               </FadeInView>
               
               <FadeInView delay={100}>
-                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>ITINERARY</Text><View style={styles.dividerLine} /></View>
+                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>TRIP DETAILS</Text><View style={styles.dividerLine} /></View>
                 <PremiumInput label="Pickup Branch" icon="office-building" value={selectedBranch} rightElement={<Feather name="lock" size={16} color={Colors.lightText} />} editable={false} />
                 <PremiumInput label="From Destination" icon="circle-outline" placeholder="Starting point" value={form.fromDest} onChangeText={(t: string) => setForm({...form, fromDest: t})} />
                 <PremiumInput label="To Destination" icon="map-marker-outline" placeholder="End point" value={form.toDest} onChangeText={(t: string) => setForm({...form, toDest: t})} />
               </FadeInView>
 
               <FadeInView delay={150}>
-                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>TEMPORAL WINDOW</Text><View style={styles.dividerLine} /></View>
+                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>TIME SCHEDULE</Text><View style={styles.dividerLine} /></View>
                 <Pressable onPress={() => openPicker('startDate', 'date')}><PremiumInput label="Pickup Date" icon="calendar" placeholder="DD/MM/YYYY" value={formatDate(form.startDate)} editable={false} /></Pressable>
                 <Pressable onPress={() => openPicker('startTime', 'time')}><PremiumInput label="Pickup Time" icon="clock-outline" placeholder="HH:MM AM" value={formatTime(form.startTime)} editable={false} /></Pressable>
                 <Pressable onPress={() => openPicker('endDate', 'date')}><PremiumInput label="Return Date" icon="calendar" placeholder="DD/MM/YYYY" value={formatDate(form.endDate)} editable={false} /></Pressable>
@@ -514,15 +523,15 @@ export default function App() {
               </FadeInView>
 
               <FadeInView delay={200}>
-                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>ASSIGNED MACHINE</Text><View style={styles.dividerLine} /></View>
-                <PremiumInput label="Car Name" icon="car-sports" placeholder="Instant Allocation (e.g. Swift)" value={form.carName} onChangeText={(t: string) => setForm({...form, carName: t})} />
-                <PremiumInput label="Car Plate Number" icon="card-text-outline" placeholder="RTO Reg (e.g. TS09 1234)" value={form.carPlate} onChangeText={(t: string) => setForm({...form, carPlate: t})} />
+                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>VEHICLE SELECTION</Text><View style={styles.dividerLine} /></View>
+                <PremiumInput label="Car Name" icon="car-sports" placeholder="(e.g. Maruti Swift)" value={form.carName} onChangeText={(t: string) => setForm({...form, carName: t})} />
+                <PremiumInput label="Car Plate Number" icon="card-text-outline" placeholder="(e.g. TS09 XY 1234)" value={form.carPlate} onChangeText={(t: string) => setForm({...form, carPlate: t})} />
 
                 <ScaleButton style={styles.checkboxRow} onPress={() => setForm({...form, confirmed: !form.confirmed})}>
                   <View style={[styles.checkbox, form.confirmed && styles.checkboxActive]}>
                     {form.confirmed && <Feather name="check" size={12} color="#FFF" />}
                   </View>
-                  <Text style={styles.checkboxText}>I possess a valid DL for cross-verification. I accept the <Text style={{fontWeight:'700', color: Colors.darkText}}>Zero-Damage Escrow</Text>.</Text>
+                  <Text style={styles.checkboxText}>I have a valid driving license. I accept the <Text style={{fontWeight:'700', color: Colors.darkText}}>Damage Policy</Text>.</Text>
                 </ScaleButton>
 
                 <ScaleButton style={styles.submitBtn} onPress={handleSubmit}>
@@ -531,8 +540,7 @@ export default function App() {
                 </ScaleButton>
               </FadeInView>
             </View>
-          </ScrollView>
-        </View>
+        </KeyboardAwareScrollView>
       )}
 
       {/* SCREEN 5: SUCCESS */}
@@ -1051,8 +1059,8 @@ const styles = StyleSheet.create({
   
   inputContainer: { marginBottom: 32 },
   inputLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  inputBoxBorderless: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, height: 48 },
-  textInput: { flex: 1, fontSize: 17, color: Colors.darkText, fontWeight: '600' },
+  inputBoxBorderless: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, minHeight: 48 },
+  textInput: { flex: 1, fontSize: 17, color: Colors.darkText, fontWeight: '600', paddingVertical: 0 },
   animatedBorder: { width: '100%', height: 1, backgroundColor: Colors.border, position: 'absolute', bottom: 0 },
   
   dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 32 },
