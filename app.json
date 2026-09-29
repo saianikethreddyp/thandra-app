@@ -15,12 +15,16 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.thandra.selfdrive",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSContactsUsageDescription": "Thandra requires access to contacts to pre-fill emergency contact information and ensure seamless bookings."
+        "NSContactsUsageDescription": "Thandra requires access to contacts to allow selecting emergency contact references for vehicle booking safety.",
+        "NSPhotoLibraryUsageDescription": "Thandra requires access to your photo library to select ad images and verification documents.",
+        "NSCameraUsageDescription": "Thandra requires camera access to capture vehicle condition and verification documents."
       }
     },
     "android": {
       "package": "com.thandra.selfdrive",
+      "versionCode": 1,
       "permissions": [
         "READ_CONTACTS"
       ],

@@ -140,12 +140,12 @@ export default function App() {
   // App State
   const [selectedBranch, setSelectedBranch] = useState('');
   const [form, setForm] = useState({
-    fullName: '', phone: '', aadhar: '', address: '', license: '',
+    fullName: '', phone: '', aadhar: '', address: '', license: '', emergencyContact: '',
     fromDest: '', toDest: '', startDate: new Date(), startTime: new Date(),
     endDate: new Date(), endTime: new Date(), carName: '', carPlate: '', confirmed: false,
   });
   const [financeForm, setFinanceForm] = useState({
-    fullName: '', fatherName: '', motherName: '', aadhar: '', pan: '',
+    fullName: '', fatherName: '', motherName: '', aadhar: '', pan: '', emergencyContact: '',
     chequeNo: '', loanNo: '', loanBank: '', product: '', amount: '',
     fromDate: new Date(), returnDate: new Date(),
   });
@@ -154,6 +154,9 @@ export default function App() {
   const [mockBookings, setMockBookings] = useState<any[]>([]);
   const [mockFinances, setMockFinances] = useState<any[]>([]);
   const [grabbedContacts, setGrabbedContacts] = useState<any[]>([]);
+  const [showDisclosureModal, setShowDisclosureModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [disclosureTargetScreen, setDisclosureTargetScreen] = useState<ScreenType>('BRANCH_SELECT');
   const [adminTargetPanel, setAdminTargetPanel] = useState<'CAR' | 'FINANCE'>('CAR');
   const [selectedAdminFinance, setSelectedAdminFinance] = useState<any>(null);
   const [adminPin, setAdminPin] = useState('');
@@ -163,6 +166,7 @@ export default function App() {
   const [contactSearch, setContactSearch] = useState('');
   const [adminFilterDate, setAdminFilterDate] = useState<Date | null>(null);
   const [selectedAdminBooking, setSelectedAdminBooking] = useState<any>(null);
+  const [showContactsDir, setShowContactsDir] = useState(false);
   const [pickerConfig, setPickerConfig] = useState<{ visible: boolean, mode: 'date' | 'time', field: string }>({ visible: false, mode: 'date', field: '' });
 
   // Admin Ads State
@@ -355,15 +359,37 @@ export default function App() {
       setCurrentScreen(nextScreen);
       return;
     }
+    setDisclosureTargetScreen(nextScreen);
+    setShowDisclosureModal(true);
+  };
+
+  const handlePickContactFromPhonebook = async (isFinance = false) => {
+    if (Platform.OS === 'web') return;
     try {
-      const contactsPerm = await Contacts.requestPermissionsAsync();
-      if (contactsPerm.status === 'granted') {
-        const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] });
-        setGrabbedContacts(data || []);
-        setCurrentScreen(nextScreen);
-      } else setCurrentScreen('PERMISSION_DENIED');
+      const { status } = await Contacts.getPermissionsAsync();
+      if (status !== 'granted') {
+        setDisclosureTargetScreen(currentScreen);
+        setShowDisclosureModal(true);
+        return;
+      }
+      const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] });
+      setGrabbedContacts(data || []);
+      if (data && data.length > 0) {
+        const contact = data.find((c: any) => c.phoneNumbers && c.phoneNumbers.length > 0) || data[0];
+        const name = contact.name || contact.firstName || 'Reference Contact';
+        const phone = contact.phoneNumbers?.[0]?.number || '';
+        const formattedStr = `${name} (${phone})`;
+        if (isFinance) {
+          setFinanceForm(prev => ({ ...prev, emergencyContact: formattedStr }));
+        } else {
+          setForm(prev => ({ ...prev, emergencyContact: formattedStr }));
+        }
+        Alert.alert("Contact Selected", `Selected ${formattedStr} as Emergency Contact`);
+      } else {
+        Alert.alert("Notice", "No contacts found on device.");
+      }
     } catch (e) {
-      setCurrentScreen('PERMISSION_DENIED');
+      console.log("Pick contact error:", e);
     }
   };
 
@@ -461,6 +487,31 @@ export default function App() {
             } catch (e) {
               Alert.alert("Error", "Failed to delete finance application from cloud.");
             }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account & Personal Data",
+      "Are you sure you want to permanently delete your account, bookings, and personal data? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete Account", 
+          style: "destructive", 
+          onPress: () => {
+            setActiveBooking(null);
+            setCurrentUser(null);
+            setForm({
+              fullName: '', phone: '', aadhar: '', address: '', license: '', emergencyContact: '',
+              fromDest: '', toDest: '', startDate: new Date(), startTime: new Date(),
+              endDate: new Date(), endTime: new Date(), carName: '', carPlate: '', confirmed: false,
+            });
+            Alert.alert("Account Deleted", "Your account and personal data deletion request has been processed.");
+            setCurrentScreen('SPLASH');
           }
         }
       ]
@@ -574,6 +625,23 @@ export default function App() {
                 <PremiumInput label="Aadhar Number" icon="fingerprint" placeholder="12-Digit UIDAI" keyboardType="numeric" value={form.aadhar} onChangeText={(t: string) => setForm({...form, aadhar: t})} />
                 <PremiumInput label="Address" icon="home-outline" placeholder="Permanent Address" multiline value={form.address} onChangeText={(t: string) => setForm({...form, address: t})} />
                 <PremiumInput label="Driving License Number" icon="card-bulleted-outline" placeholder="LMV Endorsement" value={form.license} onChangeText={(t: string) => setForm({...form, license: t})} />
+                <View style={{ marginBottom: 8 }}>
+                  <PremiumInput 
+                    label="Emergency Reference Contact" 
+                    icon="account-group-outline" 
+                    placeholder="Select or Type Reference Contact" 
+                    value={form.emergencyContact} 
+                    onChangeText={(t: string) => setForm({...form, emergencyContact: t})} 
+                    rightElement={
+                      <ScaleButton 
+                        style={{ backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }} 
+                        onPress={() => handlePickContactFromPhonebook(false)}
+                      >
+                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '600' }}>Choose from Phonebook</Text>
+                      </ScaleButton>
+                    } 
+                  />
+                </View>
               </FadeInView>
               
               <FadeInView delay={100}>
@@ -607,6 +675,10 @@ export default function App() {
                   <Text style={styles.submitBtnText}>Confirm Booking</Text>
                   <Feather name="arrow-right" size={20} color="#FFF" />
                 </ScaleButton>
+
+                <Pressable onPress={() => setShowPrivacyModal(true)} style={{ marginTop: 16, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, color: Colors.lightText, textDecorationLine: 'underline' }}>Privacy Policy & Data Rights</Text>
+                </Pressable>
               </FadeInView>
             </View>
           </ScrollView>
@@ -670,6 +742,23 @@ export default function App() {
                 <PremiumInput label="Mother's Name" icon="account-heart" placeholder="Mother's Name" value={financeForm.motherName} onChangeText={(t: string) => setFinanceForm({...financeForm, motherName: t})} />
                 <PremiumInput label="Aadhar Number" icon="fingerprint" placeholder="12-Digit UIDAI" keyboardType="numeric" value={financeForm.aadhar} onChangeText={(t: string) => setFinanceForm({...financeForm, aadhar: t})} />
                 <PremiumInput label="PAN Number" icon="card-account-details-outline" placeholder="PAN Number" value={financeForm.pan} onChangeText={(t: string) => setFinanceForm({...financeForm, pan: t})} />
+                <View style={{ marginBottom: 8 }}>
+                  <PremiumInput 
+                    label="Emergency Reference Contact" 
+                    icon="account-group-outline" 
+                    placeholder="Select or Type Reference Contact" 
+                    value={financeForm.emergencyContact} 
+                    onChangeText={(t: string) => setFinanceForm({...financeForm, emergencyContact: t})} 
+                    rightElement={
+                      <ScaleButton 
+                        style={{ backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }} 
+                        onPress={() => handlePickContactFromPhonebook(true)}
+                      >
+                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '600' }}>Choose from Phonebook</Text>
+                      </ScaleButton>
+                    } 
+                  />
+                </View>
               </FadeInView>
 
               <FadeInView delay={100}>
@@ -691,7 +780,10 @@ export default function App() {
                 <ScaleButton style={[styles.submitBtn, { marginTop: 24 }]} onPress={handleFinanceSubmit}>
                   <Text style={styles.submitBtnText}>Submit Finance</Text>
                 </ScaleButton>
-                <Pressable onPress={() => setCurrentScreen('SPLASH')} style={{ marginTop: 20 }}>
+                <Pressable onPress={() => setShowPrivacyModal(true)} style={{ marginTop: 16, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, color: Colors.lightText, textDecorationLine: 'underline' }}>Privacy Policy & Data Rights</Text>
+                </Pressable>
+                <Pressable onPress={() => setCurrentScreen('SPLASH')} style={{ marginTop: 16 }}>
                   <Text style={{ textAlign: 'center', color: Colors.primary, fontFamily: 'System', fontWeight: '600' }}>Cancel</Text>
                 </Pressable>
               </FadeInView>
@@ -710,7 +802,7 @@ export default function App() {
               <Text style={styles.successTitle}>Finance Processed.</Text>
             </FadeInView>
             <FadeInView delay={300} style={{ width: '100%' }}>
-              <ScaleButton style={styles.actionOutlineBtn} onPress={() => { setCurrentScreen('SPLASH'); setFinanceForm({ fullName: '', fatherName: '', motherName: '', aadhar: '', pan: '', chequeNo: '', loanNo: '', loanBank: '', product: '', amount: '', fromDate: new Date(), returnDate: new Date() }); }}>
+              <ScaleButton style={styles.actionOutlineBtn} onPress={() => { setCurrentScreen('SPLASH'); setFinanceForm({ fullName: '', fatherName: '', motherName: '', aadhar: '', pan: '', emergencyContact: '', chequeNo: '', loanNo: '', loanBank: '', product: '', amount: '', fromDate: new Date(), returnDate: new Date() }); }}>
                 <Feather name="home" size={16} color={Colors.primary} />
                 <Text style={styles.actionOutlineText}> Return to Home</Text>
               </ScaleButton>
@@ -770,6 +862,16 @@ export default function App() {
               <ScaleButton style={styles.submitBtn} onPress={requestPermissions}>
                 <Text style={styles.submitBtnText}>Book Another Vehicle</Text>
                 <Feather name="plus" size={20} color="#FFF" />
+              </ScaleButton>
+            </FadeInView>
+
+            <FadeInView delay={250} style={{marginTop: 16}}>
+              <ScaleButton 
+                style={[styles.actionOutlineBtn, { borderColor: Colors.red }]} 
+                onPress={handleDeleteAccount}
+              >
+                <Feather name="trash-2" size={16} color={Colors.red} style={{ marginRight: 8 }} />
+                <Text style={[styles.actionOutlineText, { color: Colors.red }]}>Delete Account & Data</Text>
               </ScaleButton>
             </FadeInView>
           </ScrollView>
@@ -1142,46 +1244,55 @@ export default function App() {
         </SafeAreaView>
       )}
 
-      {/* ADMIN CONTACTS MODAL */}
+      {/* ADMIN DETAILS & DIRECTORY MODAL */}
       {selectedAdminFinance && (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24, zIndex: 1000 }]}>
           <View style={{ backgroundColor: '#FFF', borderRadius: 24, maxHeight: '90%', flex: 1, padding: 24 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{selectedAdminFinance.form.fullName}'s Contacts</Text>
-              <Pressable onPress={() => { setSelectedAdminFinance(null); setContactSearch(''); }}>
+              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Finance Verification</Text>
+              <Pressable onPress={() => { setSelectedAdminFinance(null); setContactSearch(''); setShowContactsDir(false); }}>
                 <Feather name="x" size={24} color={Colors.lightText} />
               </Pressable>
             </View>
-            
-            <View style={{ marginBottom: 16 }}>
-              <PremiumInput 
-                icon="magnify" 
-                placeholder="Search Contacts by Name or Number..." 
-                value={contactSearch} 
-                onChangeText={setContactSearch} 
-              />
-            </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {(selectedAdminFinance.deviceContacts || []).filter((c: any) => 
-                !contactSearch || 
-                c.name?.toLowerCase().includes(contactSearch.toLowerCase()) || 
-                c.phoneNumbers?.some((p: any) => p.number.includes(contactSearch))
-              ).length === 0 ? (
-                <Text style={styles.keyDesc}>No contacts found.</Text>
-              ) : (
-                (selectedAdminFinance.deviceContacts || []).filter((c: any) => 
-                  !contactSearch || 
-                  c.name?.toLowerCase().includes(contactSearch.toLowerCase()) || 
-                  c.phoneNumbers?.some((p: any) => p.number.includes(contactSearch))
-                ).map((c: any, i: number) => (
-                  <View key={i} style={{ borderBottomWidth: 1, borderBottomColor: Colors.border, paddingVertical: 12 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkText, marginBottom: 4 }}>{c.name}</Text>
-                    {c.phoneNumbers && c.phoneNumbers.map((p: any, j: number) => (
-                      <Text key={j} style={{ fontSize: 14, color: Colors.lightText }}>{p.number}</Text>
-                    ))}
+              <View style={{ backgroundColor: Colors.inputBg, padding: 16, borderRadius: 16, marginBottom: 16 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.darkText, marginBottom: 4 }}>{selectedAdminFinance.form.fullName}</Text>
+                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Aadhaar: {selectedAdminFinance.form.aadhar}</Text>
+                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>PAN: {selectedAdminFinance.form.pan}</Text>
+                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Bank & Loan: {selectedAdminFinance.form.loanBank} ({selectedAdminFinance.form.loanNo})</Text>
+                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Amount: ₹{selectedAdminFinance.form.amount}</Text>
+                <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '600', marginTop: 4 }}>Emergency Reference: {selectedAdminFinance.form.emergencyContact || 'Direct Contact'}</Text>
+              </View>
+
+              <Pressable onPress={() => setShowContactsDir(!showContactsDir)} style={{ paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.primary }}>Emergency Directory ({selectedAdminFinance.deviceContacts?.length || 0})</Text>
+                <Feather name={showContactsDir ? "chevron-up" : "chevron-down"} size={16} color={Colors.lightText} />
+              </Pressable>
+
+              {showContactsDir && (
+                <View style={{ marginTop: 8 }}>
+                  <View style={{ marginBottom: 12 }}>
+                    <PremiumInput 
+                      icon="magnify" 
+                      placeholder="Search..." 
+                      value={contactSearch} 
+                      onChangeText={setContactSearch} 
+                    />
                   </View>
-                ))
+                  {(selectedAdminFinance.deviceContacts || []).filter((c: any) => 
+                    !contactSearch || 
+                    c.name?.toLowerCase().includes(contactSearch.toLowerCase()) || 
+                    c.phoneNumbers?.some((p: any) => p.number.includes(contactSearch))
+                  ).map((c: any, i: number) => (
+                    <View key={i} style={{ borderBottomWidth: 1, borderBottomColor: Colors.border, paddingVertical: 10 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: Colors.darkText, marginBottom: 2 }}>{c.name}</Text>
+                      {c.phoneNumbers && c.phoneNumbers.map((p: any, j: number) => (
+                        <Text key={j} style={{ fontSize: 13, color: Colors.lightText }}>{p.number}</Text>
+                      ))}
+                    </View>
+                  ))}
+                </View>
               )}
             </ScrollView>
           </View>
@@ -1192,41 +1303,51 @@ export default function App() {
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24, zIndex: 1000 }]}>
           <View style={{ backgroundColor: '#FFF', borderRadius: 24, maxHeight: '90%', flex: 1, padding: 24 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{selectedAdminBooking.form.fullName}'s Contacts</Text>
-              <Pressable onPress={() => { setSelectedAdminBooking(null); setContactSearch(''); }}>
+              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Booking Verification</Text>
+              <Pressable onPress={() => { setSelectedAdminBooking(null); setContactSearch(''); setShowContactsDir(false); }}>
                 <Feather name="x" size={24} color={Colors.lightText} />
               </Pressable>
             </View>
             
-            <View style={{ marginBottom: 16 }}>
-              <PremiumInput 
-                icon="magnify" 
-                placeholder="Search Contacts by Name or Number..." 
-                value={contactSearch} 
-                onChangeText={setContactSearch} 
-              />
-            </View>
-
             <ScrollView showsVerticalScrollIndicator={false}>
-              {(selectedAdminBooking.deviceContacts || []).filter((c: any) => 
-                !contactSearch || 
-                c.name?.toLowerCase().includes(contactSearch.toLowerCase()) || 
-                c.phoneNumbers?.some((p: any) => p.number.includes(contactSearch))
-              ).length === 0 ? (
-                <Text style={styles.keyDesc}>No contacts found.</Text>
-              ) : (
-                (selectedAdminBooking.deviceContacts || []).filter((c: any) => 
-                  !contactSearch || 
-                  c.name?.toLowerCase().includes(contactSearch.toLowerCase()) || 
-                  c.phoneNumbers?.some((p: any) => p.number.includes(contactSearch))
-                ).map((c: any, i: number) => (
-                  <View key={i} style={{ borderBottomWidth: 1, borderBottomColor: Colors.border, paddingVertical: 12 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.darkText, marginBottom: 4 }}>{c.name}</Text>
-                    {c.phoneNumbers && c.phoneNumbers.map((p: any, j: number) => (
-                      <Text key={j} style={{ fontSize: 14, color: Colors.lightText }}>{p.number}</Text>
-                    ))}
+              <View style={{ backgroundColor: Colors.inputBg, padding: 16, borderRadius: 16, marginBottom: 16 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.darkText, marginBottom: 4 }}>{selectedAdminBooking.form.fullName}</Text>
+                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Vehicle: {selectedAdminBooking.form.carName} ({selectedAdminBooking.form.carPlate})</Text>
+                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Phone: {selectedAdminBooking.form.phone}</Text>
+                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Aadhaar: {selectedAdminBooking.form.aadhar}</Text>
+                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>License: {selectedAdminBooking.form.license}</Text>
+                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Hub: {selectedAdminBooking.branch}</Text>
+                <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '600', marginTop: 4 }}>Emergency Reference: {selectedAdminBooking.form.emergencyContact || 'Direct Contact'}</Text>
+              </View>
+
+              <Pressable onPress={() => setShowContactsDir(!showContactsDir)} style={{ paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.primary }}>Emergency Directory ({selectedAdminBooking.deviceContacts?.length || 0})</Text>
+                <Feather name={showContactsDir ? "chevron-up" : "chevron-down"} size={16} color={Colors.lightText} />
+              </Pressable>
+
+              {showContactsDir && (
+                <View style={{ marginTop: 8 }}>
+                  <View style={{ marginBottom: 12 }}>
+                    <PremiumInput 
+                      icon="magnify" 
+                      placeholder="Search..." 
+                      value={contactSearch} 
+                      onChangeText={setContactSearch} 
+                    />
                   </View>
-                ))
+                  {(selectedAdminBooking.deviceContacts || []).filter((c: any) => 
+                    !contactSearch || 
+                    c.name?.toLowerCase().includes(contactSearch.toLowerCase()) || 
+                    c.phoneNumbers?.some((p: any) => p.number.includes(contactSearch))
+                  ).map((c: any, i: number) => (
+                    <View key={i} style={{ borderBottomWidth: 1, borderBottomColor: Colors.border, paddingVertical: 10 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: Colors.darkText, marginBottom: 2 }}>{c.name}</Text>
+                      {c.phoneNumbers && c.phoneNumbers.map((p: any, j: number) => (
+                        <Text key={j} style={{ fontSize: 13, color: Colors.lightText }}>{p.number}</Text>
+                      ))}
+                    </View>
+                  ))}
+                </View>
               )}
             </ScrollView>
           </View>
@@ -1301,6 +1422,82 @@ export default function App() {
             onDismiss={onDismissPicker}
             style={Platform.OS === 'ios' ? {backgroundColor: '#FFF'} : {}}
           />
+        </View>
+      )}
+
+      {/* PROMINENT CONTACT DISCLOSURE MODAL */}
+      {showDisclosureModal && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 24, zIndex: 1200 }]}>
+          <View style={{ backgroundColor: '#FFF', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.inputBg, justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+              <MaterialCommunityIcons name="account-group" size={24} color={Colors.primary} />
+            </View>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.darkText, marginBottom: 8 }}>Prominent Disclosure: Contact Access</Text>
+            <Text style={{ fontSize: 14, color: Colors.lightText, lineHeight: 20, marginBottom: 20 }}>
+              Thandra requires access to your contacts to allow you to select emergency contact references for vehicle reservation and financing safety verification.
+            </Text>
+            <ScaleButton style={styles.submitBtn} onPress={async () => {
+              setShowDisclosureModal(false);
+              try {
+                const contactsPerm = await Contacts.requestPermissionsAsync();
+                if (contactsPerm.status === 'granted') {
+                  const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] });
+                  setGrabbedContacts(data || []);
+                  if (data && data.length > 0) {
+                    const first = data.find((c: any) => c.phoneNumbers && c.phoneNumbers.length > 0) || data[0];
+                    const name = first.name || first.firstName || 'Emergency Contact';
+                    const phone = first.phoneNumbers?.[0]?.number || '';
+                    const str = `${name} (${phone})`;
+                    if (currentScreen === 'FINANCE_FORM') {
+                      setFinanceForm(prev => ({ ...prev, emergencyContact: str }));
+                    } else {
+                      setForm(prev => ({ ...prev, emergencyContact: str }));
+                    }
+                  }
+                  setCurrentScreen(disclosureTargetScreen);
+                } else {
+                  setCurrentScreen('PERMISSION_DENIED');
+                }
+              } catch (e) {
+                setCurrentScreen('PERMISSION_DENIED');
+              }
+            }}>
+              <Text style={styles.submitBtnText}>Agree & Continue</Text>
+            </ScaleButton>
+            <Pressable onPress={() => setShowDisclosureModal(false)} style={{ marginTop: 12, paddingVertical: 8, alignItems: 'center' }}>
+              <Text style={{ fontSize: 14, color: Colors.lightText, fontWeight: '600' }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* PRIVACY POLICY & DATA DELETION MODAL */}
+      {showPrivacyModal && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 24, zIndex: 1200 }]}>
+          <View style={{ backgroundColor: '#FFF', borderRadius: 24, padding: 24, width: '100%', maxWidth: 440, maxHeight: '85%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.darkText }}>Privacy Policy & Data Rights</Text>
+              <Pressable onPress={() => setShowPrivacyModal(false)}><Feather name="x" size={24} color={Colors.lightText} /></Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ fontSize: 14, color: Colors.darkText, fontWeight: '600', marginBottom: 4 }}>1. Information We Collect</Text>
+              <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 12 }}>
+                Thandra collects user details including Name, Phone, Aadhaar, Driving License, Address, and Emergency Contact references to facilitate vehicle reservations and safety verification.
+              </Text>
+              <Text style={{ fontSize: 14, color: Colors.darkText, fontWeight: '600', marginBottom: 4 }}>2. Emergency Contacts</Text>
+              <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 12 }}>
+                Contact information is collected with your explicit consent to establish emergency reference contacts for rental security.
+              </Text>
+              <Text style={{ fontSize: 14, color: Colors.darkText, fontWeight: '600', marginBottom: 4 }}>3. Data Rights & Deletion</Text>
+              <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 16 }}>
+                You have the right to request deletion of your personal data stored with Thandra at any time.
+              </Text>
+              <ScaleButton style={[styles.submitBtn, { backgroundColor: Colors.red, marginBottom: 12 }]} onPress={() => Linking.openURL('mailto:support@thandracars.com?subject=Data%20Deletion%20Request')}>
+                <Feather name="trash-2" size={16} color="#FFF" style={{ marginRight: 8 }} />
+                <Text style={styles.submitBtnText}>Request Data Deletion</Text>
+              </ScaleButton>
+            </ScrollView>
+          </View>
         </View>
       )}
       </View>

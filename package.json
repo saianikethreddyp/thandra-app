@@ -1,6 +1,6 @@
 {
-  "name": "expo-template-blank-typescript",
-  "description": "The Blank project template includes the minimum dependencies to run and an empty root component.",
+  "name": "thandra-cars",
+  "description": "Thandra Self Drive Cars Mobile Application",
   "license": "0BSD",
   "version": "57.0.23",
   "main": "index.ts",
