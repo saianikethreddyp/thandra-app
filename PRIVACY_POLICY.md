@@ -2,7 +2,7 @@
 
 **Application**: Thandra Self Drive Cars (`com.thandra.selfdrive`)  
 **Last Updated**: September 29, 2026  
-**Support Email**: [support@thandracars.com](mailto:support@thandracars.com)  
+**Support Email**: [thandrasselfdrivebnreddy11@gmail.com](mailto:thandrasselfdrivebnreddy11@gmail.com)  
 
 ---
 
@@ -70,7 +70,7 @@ In accordance with Apple App Store Review Guidelines (Guideline 5.1.1(v)) and Go
 
 ### How to Request Account & Data Deletion:
 1. **In-App Instant Deletion**: Open the app and go to **Dashboard → Delete Account & Data**. Confirm the prompt to immediately remove your active profile and session data.
-2. **Email Deletion Request**: Send an email to [support@thandracars.com](mailto:support@thandracars.com) with the subject line *"Data Deletion Request"*.
+2. **Email Deletion Request**: Send an email to [thandrasselfdrivebnreddy11@gmail.com](mailto:thandrasselfdrivebnreddy11@gmail.com) with the subject line *"Data Deletion Request"*.
 
 Upon confirmation, all active bookings, profile information, and associated records will be permanently purged from our servers within 7 business days, except where retention is legally mandated for tax or accounting audits.
 
@@ -98,5 +98,5 @@ We may update our Privacy Policy periodically to reflect service enhancements or
 
 If you have any questions, concerns, or requests regarding this Privacy Policy, please contact our team:
 * **Company Name**: Thandra Self Drive Cars
-* **Support Email**: [support@thandracars.com](mailto:support@thandracars.com)
-* **Operating Address**: Thandra Self Drive Hub, Hyderabad, Telangana, India
+* **Support Email**: [thandrasselfdrivebnreddy11@gmail.com](mailto:thandrasselfdrivebnreddy11@gmail.com)
+* **Registered Operating Address**: Vidhya Nagar, Jagtial, Karimnagar, Telangana – 505327, India

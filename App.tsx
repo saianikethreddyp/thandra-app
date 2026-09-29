@@ -1492,7 +1492,7 @@ export default function App() {
               <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 16 }}>
                 You have the right to request deletion of your personal data stored with Thandra at any time.
               </Text>
-              <ScaleButton style={[styles.submitBtn, { backgroundColor: Colors.red, marginBottom: 12 }]} onPress={() => Linking.openURL('mailto:support@thandracars.com?subject=Data%20Deletion%20Request')}>
+              <ScaleButton style={[styles.submitBtn, { backgroundColor: Colors.red, marginBottom: 12 }]} onPress={() => Linking.openURL('mailto:thandrasselfdrivebnreddy11@gmail.com?subject=Data%20Deletion%20Request')}>
                 <Feather name="trash-2" size={16} color="#FFF" style={{ marginRight: 8 }} />
                 <Text style={styles.submitBtnText}>Request Data Deletion</Text>
               </ScaleButton>
