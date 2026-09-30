@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   StyleSheet, View, Text, ScrollView, TextInput,
   StatusBar, ImageBackground, Linking, Alert, Platform,
   Animated, Easing, Pressable, KeyboardAvoidingView,
-  TouchableWithoutFeedback, Keyboard 
+  TouchableWithoutFeedback, Keyboard, TouchableOpacity, BackHandler
 } from 'react-native';
 import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
@@ -46,8 +46,6 @@ const Colors = {
 
 // --- Emil Design Curves ---
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
-
-import { TouchableOpacity } from 'react-native';
 
 const ScaleButton = ({ onPress, style, children, activeOpacity = 0.8, disabled = false }: any) => {
   return (
@@ -106,13 +104,13 @@ const PremiumInput = ({ label, icon, placeholder, value, onChangeText, keyboardT
 
   return (
     <View style={styles.inputContainer} pointerEvents={editable ? "auto" : "none"}>
-      <Text style={[styles.inputLabel, { color: isFocused ? Colors.primary : Colors.lightText }]}>{label}</Text>
-      <View style={[styles.inputBoxBorderless, multiline && { height: 80, alignItems: 'flex-start' }, !editable && { opacity: 0.7 }]}>
+      {label ? <Text style={[styles.inputLabel, { color: isFocused ? Colors.primary : Colors.lightText }]}>{label}</Text> : null}
+      <View style={[styles.inputBoxBorderless, multiline && { minHeight: 80, height: 'auto', alignItems: 'flex-start', paddingVertical: 8 }, !editable && { opacity: 0.85 }]}>
         {icon && <MaterialCommunityIcons name={icon} size={20} color={isFocused ? Colors.primary : Colors.lightText} style={{ marginRight: 12, marginTop: multiline ? 4 : 0 }} />}
         <TextInput
-          style={[styles.textInput, multiline && { height: 60, textAlignVertical: 'top' }]}
+          style={[styles.textInput, multiline && { minHeight: 60, height: 'auto', textAlignVertical: 'top' }]}
           placeholder={placeholder}
-          placeholderTextColor="#CBD5E1"
+          placeholderTextColor="#94A3B8"
           value={value}
           onChangeText={onChangeText}
           keyboardType={keyboardType}
@@ -145,7 +143,7 @@ export default function App() {
     endDate: new Date(), endTime: new Date(), carName: '', carPlate: '', confirmed: false,
   });
   const [financeForm, setFinanceForm] = useState({
-    fullName: '', fatherName: '', motherName: '', aadhar: '', pan: '', emergencyContact: '',
+    fullName: '', phone: '', fatherName: '', motherName: '', aadhar: '', pan: '', emergencyContact: '',
     chequeNo: '', loanNo: '', loanBank: '', product: '', amount: '',
     fromDate: new Date(), returnDate: new Date(),
   });
@@ -354,10 +352,110 @@ export default function App() {
     }
   };
 
+  const handleBackPress = useCallback(() => {
+    if (showAdModal) {
+      setShowAdModal(null);
+      setPendingAction(null);
+      return true;
+    }
+    if (showPrivacyModal) {
+      setShowPrivacyModal(false);
+      return true;
+    }
+    if (showDisclosureModal) {
+      setShowDisclosureModal(false);
+      return true;
+    }
+    if (selectedAdminBooking) {
+      setSelectedAdminBooking(null);
+      setContactSearch('');
+      setShowContactsDir(false);
+      return true;
+    }
+    if (selectedAdminFinance) {
+      setSelectedAdminFinance(null);
+      setContactSearch('');
+      setShowContactsDir(false);
+      return true;
+    }
+    if (pickerConfig.visible) {
+      setPickerConfig(prev => ({ ...prev, visible: false }));
+      return true;
+    }
+
+    switch (currentScreen) {
+      case 'BOOKING_FORM':
+        setCurrentScreen('BRANCH_SELECT');
+        return true;
+      case 'BRANCH_SELECT':
+        setCurrentScreen('SPLASH');
+        return true;
+      case 'FINANCE_FORM':
+        setCurrentScreen('SPLASH');
+        return true;
+      case 'FINANCE_SUCCESS':
+      case 'SUCCESS':
+      case 'DASHBOARD':
+        setCurrentScreen('SPLASH');
+        return true;
+      case 'ADMIN_DASHBOARD':
+        setCurrentScreen('ADMIN_SPLASH');
+        return true;
+      case 'ADMIN_LOGIN':
+        setCurrentScreen('ADMIN_SPLASH');
+        return true;
+      case 'ADMIN_SPLASH':
+        setCurrentScreen('SPLASH');
+        return true;
+      case 'PERMISSION_DENIED':
+        setCurrentScreen('SPLASH');
+        return true;
+      case 'SPLASH':
+      default:
+        // Keep user inside the app and prevent exiting
+        return true;
+    }
+  }, [
+    showAdModal, showPrivacyModal, showDisclosureModal,
+    selectedAdminBooking, selectedAdminFinance, pickerConfig.visible,
+    currentScreen
+  ]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => sub.remove();
+  }, [handleBackPress]);
+
   const requestPermissions = async (nextScreen: ScreenType = 'BRANCH_SELECT') => {
     if (Platform.OS === 'web') {
       setCurrentScreen(nextScreen);
       return;
+    }
+    try {
+      const { status } = await Contacts.getPermissionsAsync();
+      if (status === 'granted') {
+        // Permission is already granted! Do NOT show disclosure modal again!
+        Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers] })
+          .then(({ data }) => {
+            if (data && data.length > 0) {
+              setGrabbedContacts(data);
+              const first = data.find((c: any) => c.phoneNumbers && c.phoneNumbers.length > 0) || data[0];
+              const name = first.name || first.firstName || 'Reference Contact';
+              const phone = first.phoneNumbers?.[0]?.number || '';
+              const str = `${name} (${phone})`;
+              if (nextScreen === 'FINANCE_FORM') {
+                setFinanceForm(prev => prev.emergencyContact ? prev : ({ ...prev, emergencyContact: str }));
+              } else {
+                setForm(prev => prev.emergencyContact ? prev : ({ ...prev, emergencyContact: str }));
+              }
+            }
+          })
+          .catch(() => {});
+        setCurrentScreen(nextScreen);
+        return;
+      }
+    } catch (e) {
+      console.log('Error checking permissions:', e);
     }
     setDisclosureTargetScreen(nextScreen);
     setShowDisclosureModal(true);
@@ -394,9 +492,9 @@ export default function App() {
   };
 
   const handleFinanceSubmit = async () => {
-    const { fullName, fatherName, motherName, aadhar, pan, chequeNo, loanNo, loanBank, product, amount } = financeForm;
-    if (!fullName || !fatherName || !motherName || !aadhar || !pan || !chequeNo || !loanNo || !loanBank || !product || !amount) {
-      Alert.alert("Missing Fields", "Please complete all finance fields.");
+    const { fullName, phone, aadhar, amount } = financeForm;
+    if (!fullName?.trim() || !phone?.trim() || !aadhar?.trim() || !amount?.trim()) {
+      Alert.alert("Required Details", "Please provide your Full Name, Phone Number, Aadhaar Number, and desired Loan Amount.");
       return;
     }
     
@@ -404,6 +502,11 @@ export default function App() {
       const firestoreFinance = {
         form: {
           ...financeForm,
+          fullName: financeForm.fullName.trim(),
+          phone: financeForm.phone.trim(),
+          aadhar: financeForm.aadhar.trim(),
+          pan: financeForm.pan.trim(),
+          amount: financeForm.amount.trim(),
           fromDate: financeForm.fromDate instanceof Date ? financeForm.fromDate.toISOString() : new Date(financeForm.fromDate).toISOString(),
           returnDate: financeForm.returnDate instanceof Date ? financeForm.returnDate.toISOString() : new Date(financeForm.returnDate).toISOString(),
         },
@@ -416,7 +519,7 @@ export default function App() {
       setTimeout(() => showRandomAdThenExecute(() => {}), 500);
     } catch (e: any) {
       console.error(e);
-      Alert.alert("Error", e.message || "Failed to submit finance form.");
+      Alert.alert("Error", e.message || "Failed to submit finance application.");
     }
   };
 
@@ -573,9 +676,13 @@ export default function App() {
         <FadeInView style={styles.centered}>
           <View style={styles.errorCard}>
             <Text style={[styles.successTitle, {color: Colors.red}]}>Access Required</Text>
-            <Text style={styles.keyDesc}>We need access to your Contacts. Enable in settings.</Text>
+            <Text style={styles.keyDesc}>We need access to your Contacts to select emergency contact references. You can enable it in settings or enter details manually.</Text>
             <ScaleButton style={[styles.submitBtn, {marginTop: 20}]} onPress={() => Linking.openSettings()}>
               <Text style={styles.submitBtnText}>Open Settings</Text>
+            </ScaleButton>
+            <ScaleButton style={[styles.actionOutlineBtn, {marginTop: 12}]} onPress={() => setCurrentScreen('SPLASH')}>
+              <Feather name="arrow-left" size={16} color={Colors.primary} style={{ marginRight: 8 }} />
+              <Text style={styles.actionOutlineText}>Back to Home</Text>
             </ScaleButton>
           </View>
         </FadeInView>
@@ -583,12 +690,21 @@ export default function App() {
 
       {/* SCREEN 3: BRANCH SELECTION */}
       {currentScreen === 'BRANCH_SELECT' && (
-        <SafeAreaView style={{flex: 1}}>
-          <FadeInView style={styles.headerCentered}>
-            <Text style={styles.pageTitle}>Select Hub</Text>
-            <Text style={styles.pageDesc}>Choose your origin branch.</Text>
-          </FadeInView>
-          <ScrollView contentContainerStyle={{padding: 24, paddingTop: 0}}>
+        <SafeAreaView style={{flex: 1, backgroundColor: Colors.bg}}>
+          <View style={styles.headerWithBack}>
+            <TouchableOpacity 
+              onPress={() => setCurrentScreen('SPLASH')} 
+              style={styles.headerBackBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Feather name="arrow-left" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Select Hub</Text>
+              <Text style={styles.headerSubtitle}>Choose your origin branch</Text>
+            </View>
+          </View>
+          <ScrollView contentContainerStyle={{padding: 24, paddingTop: 16}}>
             {['Madhapur', 'Dilshuknagar', 'B.N reddy nagar', 'JNTU'].map((branch, index) => (
               <View key={branch} style={{ marginBottom: 16 }}>
                 <ScaleButton style={styles.branchCard} onPress={() => handleBranchSelect(branch)}>
@@ -610,31 +726,40 @@ export default function App() {
       {/* SCREEN 4: BOOKING FORM */}
       {currentScreen === 'BOOKING_FORM' && (
         <View style={styles.container}>
+          <SafeAreaView style={{ backgroundColor: Colors.bg }}>
+            <View style={styles.headerWithBack}>
+              <TouchableOpacity 
+                onPress={() => setCurrentScreen('BRANCH_SELECT')} 
+                style={styles.headerBackBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Feather name="arrow-left" size={22} color={Colors.primary} />
+              </TouchableOpacity>
+              <View style={styles.headerTitleContainer}>
+                <Text style={styles.headerTitle}>Reservation</Text>
+                <Text style={styles.headerSubtitle}>Booking & identity verification</Text>
+              </View>
+            </View>
+          </SafeAreaView>
           <ScrollView contentContainerStyle={{paddingBottom: 40}} showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-            <SafeAreaView style={styles.headerCentered}>
-              <FadeInView>
-                <Text style={styles.pageTitle}>Reservation</Text>
-                <Text style={styles.pageDesc}>Provide your booking and identity information.</Text>
-              </FadeInView>
-            </SafeAreaView>
 
             <View style={styles.whiteCard}>
               <FadeInView delay={50}>
-                <PremiumInput label="Full Name" icon="account-outline" placeholder="As on Govt ID" value={form.fullName} onChangeText={(t: string) => setForm({...form, fullName: t})} />
-                <PremiumInput label="Phone Number" icon="phone-outline" placeholder="OTP Dispatch" keyboardType="phone-pad" value={form.phone} onChangeText={(t: string) => setForm({...form, phone: t})} />
-                <PremiumInput label="Aadhar Number" icon="fingerprint" placeholder="12-Digit UIDAI" keyboardType="numeric" value={form.aadhar} onChangeText={(t: string) => setForm({...form, aadhar: t})} />
-                <PremiumInput label="Address" icon="home-outline" placeholder="Permanent Address" multiline value={form.address} onChangeText={(t: string) => setForm({...form, address: t})} />
-                <PremiumInput label="Driving License Number" icon="card-bulleted-outline" placeholder="LMV Endorsement" value={form.license} onChangeText={(t: string) => setForm({...form, license: t})} />
+                <PremiumInput label="Full Name" icon="account-outline" placeholder="Full name as on Govt ID" value={form.fullName} onChangeText={(t: string) => setForm({...form, fullName: t})} />
+                <PremiumInput label="Phone Number" icon="phone-outline" placeholder="10-digit mobile number" keyboardType="phone-pad" value={form.phone} onChangeText={(t: string) => setForm({...form, phone: t})} />
+                <PremiumInput label="Aadhar Number" icon="fingerprint" placeholder="12-digit Aadhaar number" keyboardType="numeric" value={form.aadhar} onChangeText={(t: string) => setForm({...form, aadhar: t})} />
+                <PremiumInput label="Address" icon="home-outline" placeholder="Permanent residential address" multiline value={form.address} onChangeText={(t: string) => setForm({...form, address: t})} />
+                <PremiumInput label="Driving License Number" icon="card-bulleted-outline" placeholder="Driving license number" value={form.license} onChangeText={(t: string) => setForm({...form, license: t})} />
                 <View style={{ marginBottom: 8 }}>
                   <PremiumInput 
                     label="Emergency Reference Contact" 
                     icon="account-group-outline" 
-                    placeholder="Select or Type Reference Contact" 
+                    placeholder="Reference name & phone" 
                     value={form.emergencyContact} 
                     onChangeText={(t: string) => setForm({...form, emergencyContact: t})} 
                     rightElement={
                       <ScaleButton 
-                        style={{ backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }} 
+                        style={{ backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginLeft: 8 }} 
                         onPress={() => handlePickContactFromPhonebook(false)}
                       >
                         <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '600' }}>Choose from Phonebook</Text>
@@ -647,8 +772,8 @@ export default function App() {
               <FadeInView delay={100}>
                 <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>ITINERARY</Text><View style={styles.dividerLine} /></View>
                 <PremiumInput label="Pickup Branch" icon="office-building" value={selectedBranch} rightElement={<Feather name="lock" size={16} color={Colors.lightText} />} editable={false} />
-                <PremiumInput label="From Destination" icon="circle-outline" placeholder="Starting point" value={form.fromDest} onChangeText={(t: string) => setForm({...form, fromDest: t})} />
-                <PremiumInput label="To Destination" icon="map-marker-outline" placeholder="End point" value={form.toDest} onChangeText={(t: string) => setForm({...form, toDest: t})} />
+                <PremiumInput label="From Destination" icon="circle-outline" placeholder="Pickup hub / Starting point" value={form.fromDest} onChangeText={(t: string) => setForm({...form, fromDest: t})} />
+                <PremiumInput label="To Destination" icon="map-marker-outline" placeholder="Drop-off point / Destination" value={form.toDest} onChangeText={(t: string) => setForm({...form, toDest: t})} />
               </FadeInView>
 
               <FadeInView delay={150}>
@@ -661,8 +786,8 @@ export default function App() {
 
               <FadeInView delay={200}>
                 <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>ASSIGNED MACHINE</Text><View style={styles.dividerLine} /></View>
-                <PremiumInput label="Car Name" icon="car-sports" placeholder="Instant Allocation (e.g. Swift)" value={form.carName} onChangeText={(t: string) => setForm({...form, carName: t})} />
-                <PremiumInput label="Car Plate Number" icon="card-text-outline" placeholder="RTO Reg (e.g. TS09 1234)" value={form.carPlate} onChangeText={(t: string) => setForm({...form, carPlate: t})} />
+                <PremiumInput label="Car Name" icon="car-sports" placeholder="Vehicle model (e.g. Swift, Ertiga, Creta)" value={form.carName} onChangeText={(t: string) => setForm({...form, carName: t})} />
+                <PremiumInput label="Car Plate Number" icon="card-text-outline" placeholder="Registration number (e.g. TS09 AB 1234)" value={form.carPlate} onChangeText={(t: string) => setForm({...form, carPlate: t})} />
 
                 <ScaleButton style={styles.checkboxRow} onPress={() => setForm({...form, confirmed: !form.confirmed})}>
                   <View style={[styles.checkbox, form.confirmed && styles.checkboxActive]}>
@@ -674,6 +799,11 @@ export default function App() {
                 <ScaleButton style={styles.submitBtn} onPress={handleSubmit}>
                   <Text style={styles.submitBtnText}>Confirm Booking</Text>
                   <Feather name="arrow-right" size={20} color="#FFF" />
+                </ScaleButton>
+
+                <ScaleButton style={[styles.actionOutlineBtn, { marginTop: 12 }]} onPress={() => setCurrentScreen('BRANCH_SELECT')}>
+                  <Feather name="arrow-left" size={16} color={Colors.primary} style={{ marginRight: 8 }} />
+                  <Text style={styles.actionOutlineText}>Back to Hub Selection</Text>
                 </ScaleButton>
 
                 <Pressable onPress={() => setShowPrivacyModal(true)} style={{ marginTop: 16, alignItems: 'center' }}>
@@ -727,31 +857,52 @@ export default function App() {
       {/* FINANCE FORM */}
       {currentScreen === 'FINANCE_FORM' && (
         <View style={styles.container}>
+          <SafeAreaView style={{ backgroundColor: Colors.bg }}>
+            <View style={styles.headerWithBack}>
+              <TouchableOpacity 
+                onPress={() => setCurrentScreen('SPLASH')} 
+                style={styles.headerBackBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Feather name="arrow-left" size={22} color={Colors.primary} />
+              </TouchableOpacity>
+              <View style={styles.headerTitleContainer}>
+                <Text style={styles.headerTitle}>Vehicle Finance</Text>
+                <Text style={styles.headerSubtitle}>Car loans & easy EMI options</Text>
+              </View>
+            </View>
+          </SafeAreaView>
           <ScrollView contentContainerStyle={{paddingBottom: 40}} showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-            <SafeAreaView style={styles.headerCentered}>
-              <FadeInView>
-                <Text style={styles.pageTitle}>Finance Application</Text>
-                <Text style={styles.pageDesc}>Provide your details for finance processing.</Text>
-              </FadeInView>
-            </SafeAreaView>
 
             <View style={styles.whiteCard}>
               <FadeInView delay={50}>
-                <PremiumInput label="Full Name" icon="account-outline" placeholder="Your Full Name" value={financeForm.fullName} onChangeText={(t: string) => setFinanceForm({...financeForm, fullName: t})} />
-                <PremiumInput label="Father's Name" icon="account-tie" placeholder="Father's Name" value={financeForm.fatherName} onChangeText={(t: string) => setFinanceForm({...financeForm, fatherName: t})} />
-                <PremiumInput label="Mother's Name" icon="account-heart" placeholder="Mother's Name" value={financeForm.motherName} onChangeText={(t: string) => setFinanceForm({...financeForm, motherName: t})} />
-                <PremiumInput label="Aadhar Number" icon="fingerprint" placeholder="12-Digit UIDAI" keyboardType="numeric" value={financeForm.aadhar} onChangeText={(t: string) => setFinanceForm({...financeForm, aadhar: t})} />
-                <PremiumInput label="PAN Number" icon="card-account-details-outline" placeholder="PAN Number" value={financeForm.pan} onChangeText={(t: string) => setFinanceForm({...financeForm, pan: t})} />
+                <View style={styles.financeInfoBanner}>
+                  <View style={styles.financeInfoIcon}>
+                    <MaterialCommunityIcons name="car-outline" size={20} color={Colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.financeInfoTitle}>Vehicle Financing & Loan Assistance</Text>
+                    <Text style={styles.financeInfoText}>
+                      Apply for self-drive car financing, long-term vehicle lease, or purchase loans with Thandra partners.
+                    </Text>
+                  </View>
+                </View>
+
+                <PremiumInput label="Full Name" icon="account-outline" placeholder="Full name as on Govt ID" value={financeForm.fullName} onChangeText={(t: string) => setFinanceForm({...financeForm, fullName: t})} />
+                <PremiumInput label="Phone Number" icon="phone-outline" placeholder="10-digit mobile number" keyboardType="phone-pad" value={financeForm.phone} onChangeText={(t: string) => setFinanceForm({...financeForm, phone: t})} />
+                <PremiumInput label="Aadhar Number" icon="fingerprint" placeholder="12-digit Aadhaar number" keyboardType="numeric" value={financeForm.aadhar} onChangeText={(t: string) => setFinanceForm({...financeForm, aadhar: t})} />
+                <PremiumInput label="PAN Number" icon="card-account-details-outline" placeholder="10-digit PAN (e.g. ABCDE1234F)" value={financeForm.pan} onChangeText={(t: string) => setFinanceForm({...financeForm, pan: t})} />
+                <PremiumInput label="Father's / Guardian Name (Optional)" icon="account-tie" placeholder="Father or guardian's name" value={financeForm.fatherName} onChangeText={(t: string) => setFinanceForm({...financeForm, fatherName: t})} />
                 <View style={{ marginBottom: 8 }}>
                   <PremiumInput 
                     label="Emergency Reference Contact" 
                     icon="account-group-outline" 
-                    placeholder="Select or Type Reference Contact" 
+                    placeholder="Reference name & phone" 
                     value={financeForm.emergencyContact} 
                     onChangeText={(t: string) => setFinanceForm({...financeForm, emergencyContact: t})} 
                     rightElement={
                       <ScaleButton 
-                        style={{ backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }} 
+                        style={{ backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, marginLeft: 8 }} 
                         onPress={() => handlePickContactFromPhonebook(true)}
                       >
                         <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '600' }}>Choose from Phonebook</Text>
@@ -762,29 +913,30 @@ export default function App() {
               </FadeInView>
 
               <FadeInView delay={100}>
-                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>LOAN DETAILS</Text><View style={styles.dividerLine} /></View>
-                <PremiumInput label="Cheque No" icon="bank-transfer" placeholder="Cheque Number" value={financeForm.chequeNo} onChangeText={(t: string) => setFinanceForm({...financeForm, chequeNo: t})} />
-                <PremiumInput label="Loan No" icon="file-document-outline" placeholder="Loan Number" value={financeForm.loanNo} onChangeText={(t: string) => setFinanceForm({...financeForm, loanNo: t})} />
-                <PremiumInput label="Loan Bank" icon="bank-outline" placeholder="Bank Name" value={financeForm.loanBank} onChangeText={(t: string) => setFinanceForm({...financeForm, loanBank: t})} />
-                <PremiumInput label="Product" icon="package-variant" placeholder="Product Details" value={financeForm.product} onChangeText={(t: string) => setFinanceForm({...financeForm, product: t})} />
-                <PremiumInput label="Amount" icon="currency-inr" placeholder="Loan Amount" keyboardType="numeric" value={financeForm.amount} onChangeText={(t: string) => setFinanceForm({...financeForm, amount: t})} />
+                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>FINANCING DETAILS</Text><View style={styles.dividerLine} /></View>
+                <PremiumInput label="Desired Loan Amount (₹)" icon="currency-inr" placeholder="e.g. 500000" keyboardType="numeric" value={financeForm.amount} onChangeText={(t: string) => setFinanceForm({...financeForm, amount: t})} />
+                <PremiumInput label="Vehicle Model / Product (Optional)" icon="package-variant" placeholder="e.g. Swift, Creta, Commercial Vehicle" value={financeForm.product} onChangeText={(t: string) => setFinanceForm({...financeForm, product: t})} />
+                <PremiumInput label="Preferred Bank / Financier (Optional)" icon="bank-outline" placeholder="e.g. HDFC, SBI, ICICI, Any" value={financeForm.loanBank} onChangeText={(t: string) => setFinanceForm({...financeForm, loanBank: t})} />
+                <PremiumInput label="Existing Loan / Cheque Ref (Optional)" icon="file-document-outline" placeholder="Reference if refinancing" value={financeForm.chequeNo} onChangeText={(t: string) => setFinanceForm({...financeForm, chequeNo: t})} />
               </FadeInView>
 
               <FadeInView delay={150}>
-                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>TIMING</Text><View style={styles.dividerLine} /></View>
-                <Pressable onPress={() => openPicker('financeFromDate', 'date')}><PremiumInput label="From Date" icon="calendar" placeholder="DD/MM/YYYY" value={formatDate(financeForm.fromDate)} editable={false} /></Pressable>
-                <Pressable onPress={() => openPicker('financeReturnDate', 'date')}><PremiumInput label="Return Date" icon="calendar" placeholder="DD/MM/YYYY" value={formatDate(financeForm.returnDate)} editable={false} /></Pressable>
+                <View style={styles.dividerContainer}><View style={styles.dividerLine} /><Text style={styles.dividerText}>LOAN TIMELINE</Text><View style={styles.dividerLine} /></View>
+                <Pressable onPress={() => openPicker('financeFromDate', 'date')}><PremiumInput label="Preferred Start Date" icon="calendar" placeholder="DD/MM/YYYY" value={formatDate(financeForm.fromDate)} editable={false} /></Pressable>
+                <Pressable onPress={() => openPicker('financeReturnDate', 'date')}><PremiumInput label="Expected Completion Date" icon="calendar" placeholder="DD/MM/YYYY" value={formatDate(financeForm.returnDate)} editable={false} /></Pressable>
               </FadeInView>
 
               <FadeInView delay={200}>
                 <ScaleButton style={[styles.submitBtn, { marginTop: 24 }]} onPress={handleFinanceSubmit}>
-                  <Text style={styles.submitBtnText}>Submit Finance</Text>
+                  <Text style={styles.submitBtnText}>Submit Finance Application</Text>
+                  <Feather name="arrow-right" size={20} color="#FFF" />
+                </ScaleButton>
+                <ScaleButton style={[styles.actionOutlineBtn, { marginTop: 12 }]} onPress={() => setCurrentScreen('SPLASH')}>
+                  <Feather name="arrow-left" size={16} color={Colors.primary} style={{ marginRight: 8 }} />
+                  <Text style={styles.actionOutlineText}>Back to Home</Text>
                 </ScaleButton>
                 <Pressable onPress={() => setShowPrivacyModal(true)} style={{ marginTop: 16, alignItems: 'center' }}>
                   <Text style={{ fontSize: 12, color: Colors.lightText, textDecorationLine: 'underline' }}>Privacy Policy & Data Rights</Text>
-                </Pressable>
-                <Pressable onPress={() => setCurrentScreen('SPLASH')} style={{ marginTop: 16 }}>
-                  <Text style={{ textAlign: 'center', color: Colors.primary, fontFamily: 'System', fontWeight: '600' }}>Cancel</Text>
                 </Pressable>
               </FadeInView>
             </View>
@@ -794,15 +946,18 @@ export default function App() {
 
       {/* FINANCE SUCCESS */}
       {currentScreen === 'FINANCE_SUCCESS' && (
-        <SafeAreaView style={{flex: 1}}>
+        <SafeAreaView style={{flex: 1, backgroundColor: Colors.bg}}>
           <ScrollView contentContainerStyle={styles.successScroll} showsVerticalScrollIndicator={false}>
             <FadeInView delay={100} style={{ alignItems: 'center' }}>
               <View style={styles.successIconCircle}><Feather name="check" size={32} color={Colors.green} /></View>
               <Text style={styles.successSubtitle}>APPLICATION RECEIVED</Text>
-              <Text style={styles.successTitle}>Finance Processed.</Text>
+              <Text style={styles.successTitle}>Finance Application Submitted</Text>
+              <Text style={[styles.pageDesc, { marginBottom: 24, textAlign: 'center' }]}>
+                We have received your loan request of ₹{financeForm.amount || '0'}. Our loan executive will review your details and contact you on {financeForm.phone || 'your phone number'} within 24 hours.
+              </Text>
             </FadeInView>
             <FadeInView delay={300} style={{ width: '100%' }}>
-              <ScaleButton style={styles.actionOutlineBtn} onPress={() => { setCurrentScreen('SPLASH'); setFinanceForm({ fullName: '', fatherName: '', motherName: '', aadhar: '', pan: '', emergencyContact: '', chequeNo: '', loanNo: '', loanBank: '', product: '', amount: '', fromDate: new Date(), returnDate: new Date() }); }}>
+              <ScaleButton style={styles.actionOutlineBtn} onPress={() => { setCurrentScreen('SPLASH'); setFinanceForm({ fullName: '', phone: '', fatherName: '', motherName: '', aadhar: '', pan: '', emergencyContact: '', chequeNo: '', loanNo: '', loanBank: '', product: '', amount: '', fromDate: new Date(), returnDate: new Date() }); }}>
                 <Feather name="home" size={16} color={Colors.primary} />
                 <Text style={styles.actionOutlineText}> Return to Home</Text>
               </ScaleButton>
@@ -813,9 +968,16 @@ export default function App() {
 
       {/* SCREEN 6: DASHBOARD (NEW) */}
       {currentScreen === 'DASHBOARD' && (
-        <SafeAreaView style={{flex: 1}}>
+        <SafeAreaView style={{flex: 1, backgroundColor: Colors.bg}}>
           <View style={styles.dashboardHeader}>
-            <View>
+            <TouchableOpacity 
+              onPress={() => { setActiveBooking(null); setCurrentScreen('SPLASH'); }} 
+              style={[styles.headerBackBtn, { marginRight: 12 }]}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Feather name="arrow-left" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
               <Text style={styles.dashboardGreeting}>Hello, {currentUser?.username}</Text>
               <Text style={styles.dashboardDate}>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
             </View>
@@ -880,34 +1042,62 @@ export default function App() {
 
       {/* ADMIN SPLASH */}
       {currentScreen === 'ADMIN_SPLASH' && (
-        <SafeAreaView style={{flex: 1, backgroundColor: Colors.bg, justifyContent: 'center', padding: 24}}>
-          <FadeInView style={{alignItems: 'center', marginBottom: 40}}>
-            <View style={styles.logoCircle}>
-              <MaterialCommunityIcons name="shield-account-outline" size={40} color={Colors.primary} />
+        <SafeAreaView style={{flex: 1, backgroundColor: Colors.bg}}>
+          <View style={styles.headerWithBack}>
+            <TouchableOpacity 
+              onPress={() => setCurrentScreen('SPLASH')} 
+              style={styles.headerBackBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Feather name="arrow-left" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Admin Portal</Text>
+              <Text style={styles.headerSubtitle}>Select management panel</Text>
             </View>
-            <Text style={styles.pageTitle}>Admin Portal</Text>
-            <Text style={styles.pageDesc}>Select the panel you want to manage.</Text>
-          </FadeInView>
-          
-          <FadeInView delay={100} style={{ width: '100%' }}>
-            <ScaleButton style={[styles.submitBtn, {marginBottom: 16}]} onPress={() => { setAdminTargetPanel('FINANCE'); setCurrentScreen('ADMIN_LOGIN'); }}>
-              <Text style={styles.submitBtnText}>Finance Panel</Text>
-              <Feather name="dollar-sign" size={20} color="#FFF" />
-            </ScaleButton>
-            <ScaleButton style={styles.submitBtn} onPress={() => { setAdminTargetPanel('CAR'); setCurrentScreen('ADMIN_LOGIN'); }}>
-              <Text style={styles.submitBtnText}>Car Panel</Text>
-              <Feather name="truck" size={20} color="#FFF" />
-            </ScaleButton>
-            <Pressable onPress={() => setCurrentScreen('SPLASH')} style={{ marginTop: 24 }}>
-              <Text style={{ textAlign: 'center', color: Colors.primary, fontFamily: 'System', fontWeight: '600' }}>Back to Home</Text>
-            </Pressable>
-          </FadeInView>
+          </View>
+          <View style={{flex: 1, justifyContent: 'center', padding: 24}}>
+            <FadeInView style={{alignItems: 'center', marginBottom: 40}}>
+              <View style={styles.logoCircle}>
+                <MaterialCommunityIcons name="shield-account-outline" size={40} color={Colors.primary} />
+              </View>
+              <Text style={styles.pageTitle}>Admin Portal</Text>
+              <Text style={styles.pageDesc}>Select the panel you want to manage.</Text>
+            </FadeInView>
+            
+            <FadeInView delay={100} style={{ width: '100%' }}>
+              <ScaleButton style={[styles.submitBtn, {marginBottom: 16}]} onPress={() => { setAdminTargetPanel('FINANCE'); setCurrentScreen('ADMIN_LOGIN'); }}>
+                <Text style={styles.submitBtnText}>Finance Panel</Text>
+                <Feather name="dollar-sign" size={20} color="#FFF" />
+              </ScaleButton>
+              <ScaleButton style={styles.submitBtn} onPress={() => { setAdminTargetPanel('CAR'); setCurrentScreen('ADMIN_LOGIN'); }}>
+                <Text style={styles.submitBtnText}>Car Panel</Text>
+                <Feather name="truck" size={20} color="#FFF" />
+              </ScaleButton>
+              <Pressable onPress={() => setCurrentScreen('SPLASH')} style={{ marginTop: 24 }}>
+                <Text style={{ textAlign: 'center', color: Colors.primary, fontFamily: 'System', fontWeight: '600' }}>Back to Home</Text>
+              </Pressable>
+            </FadeInView>
+          </View>
         </SafeAreaView>
       )}
 
       {/* SCREEN 7: ADMIN LOGIN */}
       {currentScreen === 'ADMIN_LOGIN' && (
         <SafeAreaView style={{flex: 1, backgroundColor: Colors.bg}}>
+          <View style={styles.headerWithBack}>
+            <TouchableOpacity 
+              onPress={() => setCurrentScreen('ADMIN_SPLASH')} 
+              style={styles.headerBackBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Feather name="arrow-left" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Admin Portal</Text>
+              <Text style={styles.headerSubtitle}>{adminTargetPanel === 'FINANCE' ? 'Finance Panel' : 'Car Panel'}</Text>
+            </View>
+          </View>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.centered}>
               <FadeInView delay={100} style={{alignItems: 'center', marginBottom: 40}}>
@@ -952,7 +1142,6 @@ export default function App() {
                       }
                     } catch (error) {
                       console.log("Error fetching PIN:", error);
-                      // Fallback if offline or permissions issue
                       if (adminPin === '1234') {
                         setAdminPin('');
                         setAdminFailedAttempts(0);
@@ -973,13 +1162,20 @@ export default function App() {
 
       {/* SCREEN 8: ADMIN DASHBOARD */}
       {currentScreen === 'ADMIN_DASHBOARD' && (
-        <SafeAreaView style={{flex: 1}}>
+        <SafeAreaView style={{flex: 1, backgroundColor: Colors.bg}}>
           <View style={styles.dashboardHeader}>
-            <View>
+            <TouchableOpacity 
+              onPress={() => setCurrentScreen('ADMIN_SPLASH')} 
+              style={[styles.headerBackBtn, { marginRight: 8 }]}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Feather name="arrow-left" size={22} color={Colors.primary} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
               <Text style={styles.dashboardGreeting}>Command Center</Text>
               <Text style={styles.dashboardDate}>Managing {adminTargetPanel === 'FINANCE' ? mockFinances.length : mockBookings.length} {adminTargetPanel === 'FINANCE' ? 'Finances' : 'Bookings'} & {adsList.length} Ads</Text>
             </View>
-            <Pressable onPress={() => setCurrentScreen('SPLASH')}>
+            <Pressable onPress={() => setCurrentScreen('SPLASH')} hitSlop={10}>
               <View style={styles.avatar}><MaterialCommunityIcons name="logout" size={20} color="#FFF" /></View>
             </Pressable>
           </View>
@@ -1033,7 +1229,10 @@ export default function App() {
           <ScrollView contentContainerStyle={{padding: 24, paddingTop: 0}}>
             {adminTargetPanel === 'FINANCE' ? (
               mockFinances.filter(b => {
-                const matchSearch = !dashboardSearch || b.form.fullName.toLowerCase().includes(dashboardSearch.toLowerCase()) || b.form.aadhar.includes(dashboardSearch);
+                const matchSearch = !dashboardSearch || 
+                  b.form.fullName?.toLowerCase().includes(dashboardSearch.toLowerCase()) || 
+                  b.form.aadhar?.includes(dashboardSearch) ||
+                  (b.form.phone && b.form.phone.includes(dashboardSearch));
                 const matchDate = !adminFilterDate || (
                   b.form.fromDate.getDate() === adminFilterDate.getDate() &&
                   b.form.fromDate.getMonth() === adminFilterDate.getMonth() &&
@@ -1047,7 +1246,10 @@ export default function App() {
                 </View>
               ) : (
                 mockFinances.filter(b => {
-                  const matchSearch = !dashboardSearch || b.form.fullName.toLowerCase().includes(dashboardSearch.toLowerCase()) || b.form.aadhar.includes(dashboardSearch);
+                  const matchSearch = !dashboardSearch || 
+                    b.form.fullName?.toLowerCase().includes(dashboardSearch.toLowerCase()) || 
+                    b.form.aadhar?.includes(dashboardSearch) ||
+                    (b.form.phone && b.form.phone.includes(dashboardSearch));
                   const matchDate = !adminFilterDate || (
                     b.form.fromDate.getDate() === adminFilterDate.getDate() &&
                     b.form.fromDate.getMonth() === adminFilterDate.getMonth() &&
@@ -1072,9 +1274,9 @@ export default function App() {
                       
                       <View style={styles.adminDetailsRow}>
                         <View style={styles.adminDetailItem}>
-                          <Text style={styles.adminDetailLabel}>LOAN</Text>
-                          <Text style={styles.adminDetailValue}>{finance.form.loanBank}</Text>
-                          <Text style={styles.adminDetailSub}>{finance.form.loanNo}</Text>
+                          <Text style={styles.adminDetailLabel}>FINANCE / VEHICLE</Text>
+                          <Text style={styles.adminDetailValue}>{finance.form.product || finance.form.loanBank || 'Vehicle Loan'}</Text>
+                          <Text style={styles.adminDetailSub}>{finance.form.loanBank ? `Bank: ${finance.form.loanBank}` : (finance.form.loanNo ? `Ref: ${finance.form.loanNo}` : 'New Loan')}</Text>
                         </View>
                         <View style={styles.adminDetailItem}>
                           <Text style={styles.adminDetailLabel}>AMOUNT</Text>
@@ -1084,8 +1286,8 @@ export default function App() {
                       </View>
 
                       <View style={styles.adminContactRow}>
-                        <MaterialCommunityIcons name="card-account-details-outline" size={16} color={Colors.lightText} />
-                        <Text style={styles.adminContactText}>Aadhar: {finance.form.aadhar}</Text>
+                        <MaterialCommunityIcons name="phone" size={16} color={Colors.lightText} />
+                        <Text style={styles.adminContactText}>{finance.form.phone || `Aadhaar: ${finance.form.aadhar}`}</Text>
                       </View>
                       </View>
                     </Pressable>
@@ -1258,10 +1460,14 @@ export default function App() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={{ backgroundColor: Colors.inputBg, padding: 16, borderRadius: 16, marginBottom: 16 }}>
                 <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.darkText, marginBottom: 4 }}>{selectedAdminFinance.form.fullName}</Text>
+                {selectedAdminFinance.form.phone ? <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Phone: {selectedAdminFinance.form.phone}</Text> : null}
                 <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Aadhaar: {selectedAdminFinance.form.aadhar}</Text>
-                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>PAN: {selectedAdminFinance.form.pan}</Text>
-                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Bank & Loan: {selectedAdminFinance.form.loanBank} ({selectedAdminFinance.form.loanNo})</Text>
-                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Amount: ₹{selectedAdminFinance.form.amount}</Text>
+                {selectedAdminFinance.form.pan ? <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>PAN: {selectedAdminFinance.form.pan}</Text> : null}
+                {selectedAdminFinance.form.fatherName ? <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Father / Guardian: {selectedAdminFinance.form.fatherName}</Text> : null}
+                {selectedAdminFinance.form.product ? <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Vehicle / Model: {selectedAdminFinance.form.product}</Text> : null}
+                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Bank & Ref: {selectedAdminFinance.form.loanBank || 'Any Bank'} {selectedAdminFinance.form.chequeNo || selectedAdminFinance.form.loanNo ? `(${selectedAdminFinance.form.chequeNo || selectedAdminFinance.form.loanNo})` : ''}</Text>
+                <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Desired Amount: ₹{selectedAdminFinance.form.amount}</Text>
+                {selectedAdminFinance.form.fromDate ? <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 2 }}>Timeline: {formatDate(selectedAdminFinance.form.fromDate)} - {formatDate(selectedAdminFinance.form.returnDate)}</Text> : null}
                 <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '600', marginTop: 4 }}>Emergency Reference: {selectedAdminFinance.form.emergencyContact || 'Direct Contact'}</Text>
               </View>
 
@@ -1361,22 +1567,25 @@ export default function App() {
             
             {/* Close Button placed explicitly above the modal Container, no absolute positioning tricks */}
             <View style={{ width: '90%', alignItems: 'flex-end', marginBottom: 15 }}>
-              <Pressable 
+              <TouchableOpacity 
+                activeOpacity={0.7}
+                hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
                 style={{
                   width: 50, height: 50, borderRadius: 25, 
                   backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center',
-                  shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 5
+                  shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 8
                 }}
                 onPress={() => {
                   setShowAdModal(null);
                   if (pendingAction) {
-                    pendingAction();
+                    const action = pendingAction;
                     setPendingAction(null);
+                    action();
                   }
                 }}
               >
                 <Feather name="x" size={28} color="#000" />
-              </Pressable>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.adModalContainer}>
@@ -1448,7 +1657,7 @@ export default function App() {
                     const name = first.name || first.firstName || 'Emergency Contact';
                     const phone = first.phoneNumbers?.[0]?.number || '';
                     const str = `${name} (${phone})`;
-                    if (currentScreen === 'FINANCE_FORM') {
+                    if (disclosureTargetScreen === 'FINANCE_FORM') {
                       setFinanceForm(prev => ({ ...prev, emergencyContact: str }));
                     } else {
                       setForm(prev => ({ ...prev, emergencyContact: str }));
@@ -1456,17 +1665,22 @@ export default function App() {
                   }
                   setCurrentScreen(disclosureTargetScreen);
                 } else {
-                  setCurrentScreen('PERMISSION_DENIED');
+                  Alert.alert(
+                    "Permission Not Granted",
+                    "You can still continue and enter your emergency contact manually.",
+                    [{ text: "Continue", onPress: () => setCurrentScreen(disclosureTargetScreen) }]
+                  );
                 }
               } catch (e) {
-                setCurrentScreen('PERMISSION_DENIED');
+                console.log('Contacts permission error:', e);
+                setCurrentScreen(disclosureTargetScreen);
               }
             }}>
               <Text style={styles.submitBtnText}>Agree & Continue</Text>
             </ScaleButton>
-            <Pressable onPress={() => setShowDisclosureModal(false)} style={{ marginTop: 12, paddingVertical: 8, alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => setShowDisclosureModal(false)} style={{ marginTop: 12, paddingVertical: 8, alignItems: 'center' }}>
               <Text style={{ fontSize: 14, color: Colors.lightText, fontWeight: '600' }}>Cancel</Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -1521,10 +1735,82 @@ const styles = StyleSheet.create({
 
   // Shared Headers
   headerCentered: { backgroundColor: Colors.bg, padding: 24, paddingBottom: 24, paddingTop: 40, alignItems: 'center' },
+  headerWithBack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 12 : 16,
+    paddingBottom: 16,
+    backgroundColor: Colors.bg,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  headerBackBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.cardBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#94A3B8',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    marginRight: 12,
+  },
+  headerTitleContainer: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.darkText,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: Colors.lightText,
+    fontWeight: '500',
+    marginTop: 2,
+  },
   pageTitle: { fontSize: 36, fontWeight: '800', color: Colors.darkText, marginBottom: 8, letterSpacing: -1, textAlign: 'center' },
   pageDesc: { fontSize: 14, color: Colors.lightText, lineHeight: 22, fontWeight: '500', textAlign: 'center', paddingHorizontal: 20 },
   keyDesc: { fontSize: 14, color: Colors.lightText, lineHeight: 22, fontWeight: '500', textAlign: 'center' },
   
+  // Finance Info Banner
+  financeInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  financeInfoIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  financeInfoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.darkText,
+    marginBottom: 4,
+  },
+  financeInfoText: {
+    fontSize: 12,
+    color: Colors.lightText,
+    lineHeight: 18,
+  },
+
   // Branch Select
   branchCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.cardBg, padding: 20, borderRadius: 20, elevation: 1, shadowColor: '#94A3B8', shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, borderWidth: 1, borderColor: 'rgba(226, 232, 240, 0.5)' },
   branchIconBg: { width: 48, height: 48, borderRadius: 14, backgroundColor: Colors.inputBg, justifyContent: 'center', alignItems: 'center' },
@@ -1535,10 +1821,26 @@ const styles = StyleSheet.create({
   whiteCardWrapper: { flex: 1, backgroundColor: Colors.bg },
   whiteCard: { flex: 1, backgroundColor: Colors.bg, paddingHorizontal: 24, paddingTop: 16 },
   
-  inputContainer: { marginBottom: 32 },
-  inputLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 },
-  inputBoxBorderless: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, height: 48 },
-  textInput: { flex: 1, fontSize: 17, color: Colors.darkText, fontWeight: '600' },
+  inputContainer: { marginBottom: 20 },
+  inputLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 },
+  inputBoxBorderless: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    minHeight: 48, 
+    paddingVertical: 4, 
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent'
+  },
+  textInput: { 
+    flex: 1, 
+    fontSize: 16, 
+    color: Colors.darkText, 
+    fontWeight: '600',
+    paddingVertical: Platform.OS === 'android' ? 4 : 8,
+    paddingHorizontal: 0,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
   animatedBorder: { width: '100%', height: 1, backgroundColor: Colors.border, position: 'absolute', bottom: 0 },
   
   dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 32 },
