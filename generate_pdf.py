@@ -211,7 +211,7 @@ def generate():
     
     # Title & Metadata
     pdf.add_title("Privacy Policy")
-    pdf.add_subtitle("Application: Thandra Self Drive Cars | Package: com.thandra.selfdrive | Date: September 29, 2026")
+    pdf.add_subtitle("Application: Thandra Self Drive Cars | Package: com.thandracars.selfdrive | Date: September 29, 2026")
     pdf.y -= 8
     
     pdf.add_paragraph("Welcome to Thandra Self Drive Cars (\"Thandra,\" \"we,\" \"our,\" or \"us\"). We are committed to protecting your privacy and ensuring your personal information is handled safely, transparently, and responsibly. This Privacy Policy describes how we collect, use, process, and safeguard your information when you use the Thandra mobile application and our vehicle reservation services.")

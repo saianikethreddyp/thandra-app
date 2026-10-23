@@ -3,14 +3,14 @@
     "name": "Thandra",
     "slug": "thandra-cars",
     "scheme": "thandra",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.thandra.selfdrive",
-      "buildNumber": "1",
+      "bundleIdentifier": "com.thandracars.selfdrive",
+      "buildNumber": "3",
       "infoPlist": {
         "NSContactsUsageDescription": "Thandra requires access to contacts to allow selecting emergency contact references for vehicle booking safety.",
         "NSPhotoLibraryUsageDescription": "Thandra requires access to your photo library to select ad images and verification documents.",
@@ -18,8 +18,8 @@
       }
     },
     "android": {
-      "package": "com.thandra.selfdrive",
-      "versionCode": 1,
+      "package": "com.thandracars.selfdrive",
+      "versionCode": 3,
       "permissions": [
         "READ_CONTACTS"
       ],

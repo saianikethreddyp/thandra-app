@@ -1,6 +1,6 @@
 # Privacy Policy — Thandra Self Drive Cars
 
-**Application**: Thandra Self Drive Cars (`com.thandra.selfdrive`)  
+**Application**: Thandra Self Drive Cars (`com.thandracars.selfdrive`)  
 **Last Updated**: September 29, 2026  
 **Support Email**: [thandrasselfdrivebnreddy11@gmail.com](mailto:thandrasselfdrivebnreddy11@gmail.com)  
 
