@@ -44,6 +44,8 @@ const Colors = {
   primaryLight: '#334155'
 };
 
+export const PRIVACY_POLICY_URL = 'https://saianikethreddyp.github.io/thandra-app/privacy-policy.html';
+
 // --- Emil Design Curves ---
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 
@@ -666,6 +668,11 @@ export default function App() {
                 <Text style={styles.splashSubmitBtnText}>Finance</Text>
                 <Feather name="dollar-sign" size={20} color={Colors.primary} />
               </ScaleButton>
+              <Pressable onPress={() => setShowPrivacyModal(true)} style={{ marginTop: 18, alignItems: 'center' }} hitSlop={{ top: 10, bottom: 10, left: 15, right: 15 }}>
+                <Text style={{ fontSize: 13, color: '#FFFFFF', opacity: 0.9, textDecorationLine: 'underline', fontWeight: '500' }}>
+                  Privacy Policy & Data Rights
+                </Text>
+              </Pressable>
             </Animated.View>
           </View>
         </View>
@@ -1694,18 +1701,24 @@ export default function App() {
               <Pressable onPress={() => setShowPrivacyModal(false)}><Feather name="x" size={24} color={Colors.lightText} /></Pressable>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={{ fontSize: 14, color: Colors.darkText, fontWeight: '600', marginBottom: 4 }}>1. Information We Collect</Text>
-              <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 12 }}>
-                Thandra collects user details including Name, Phone, Aadhaar, Driving License, Address, and Emergency Contact references to facilitate vehicle reservations and safety verification.
+              <Text style={{ fontSize: 14, color: Colors.darkText, fontWeight: '700', marginBottom: 4 }}>1. Information We Collect</Text>
+              <Text style={{ fontSize: 13, color: Colors.lightText, lineHeight: 18, marginBottom: 12 }}>
+                Thandra collects user details including Name, Phone, Permanent Address, Aadhaar, Driving License, and Emergency Contact references to facilitate vehicle reservations and rental safety verification under transport regulations.
               </Text>
-              <Text style={{ fontSize: 14, color: Colors.darkText, fontWeight: '600', marginBottom: 4 }}>2. Emergency Contacts</Text>
-              <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 12 }}>
-                Contact information is collected with your explicit consent to establish emergency reference contacts for rental security.
+              <Text style={{ fontSize: 14, color: Colors.darkText, fontWeight: '700', marginBottom: 4 }}>2. Emergency Contacts & Privacy</Text>
+              <Text style={{ fontSize: 13, color: Colors.lightText, lineHeight: 18, marginBottom: 12 }}>
+                Contact information is collected strictly with your affirmative consent to establish emergency references during the rental period. We do not sell, rent, monetize, or trade contact data with third-party marketing networks.
               </Text>
-              <Text style={{ fontSize: 14, color: Colors.darkText, fontWeight: '600', marginBottom: 4 }}>3. Data Rights & Deletion</Text>
-              <Text style={{ fontSize: 13, color: Colors.lightText, marginBottom: 16 }}>
-                You have the right to request deletion of your personal data stored with Thandra at any time.
+              <Text style={{ fontSize: 14, color: Colors.darkText, fontWeight: '700', marginBottom: 4 }}>3. Data Rights & Permanent Deletion</Text>
+              <Text style={{ fontSize: 13, color: Colors.lightText, lineHeight: 18, marginBottom: 16 }}>
+                You have the full right to delete your account and personal records at any time. Requests are processed within 7 business days.
               </Text>
+
+              <ScaleButton style={[styles.actionOutlineBtn, { marginBottom: 12, paddingVertical: 12 }]} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>
+                <Feather name="external-link" size={16} color={Colors.primary} style={{ marginRight: 8 }} />
+                <Text style={styles.actionOutlineText}>View Official Privacy Policy (Web)</Text>
+              </ScaleButton>
+
               <ScaleButton style={[styles.submitBtn, { backgroundColor: Colors.red, marginBottom: 12 }]} onPress={() => Linking.openURL('mailto:thandrasselfdrivebnreddy11@gmail.com?subject=Data%20Deletion%20Request')}>
                 <Feather name="trash-2" size={16} color="#FFF" style={{ marginRight: 8 }} />
                 <Text style={styles.submitBtnText}>Request Data Deletion</Text>

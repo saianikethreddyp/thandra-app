@@ -1,7 +1,8 @@
 # Privacy Policy — Thandra Self Drive Cars
 
 **Application**: Thandra Self Drive Cars (`com.thandracars.selfdrive`)  
-**Last Updated**: September 29, 2026  
+**Live Policy URL**: [https://saianikethreddyp.github.io/thandra-app/privacy-policy.html](https://saianikethreddyp.github.io/thandra-app/privacy-policy.html)  
+**Last Updated**: October 28, 2026  
 **Support Email**: [thandrasselfdrivebnreddy11@gmail.com](mailto:thandrasselfdrivebnreddy11@gmail.com)  
 
 ---
