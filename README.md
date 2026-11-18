@@ -31,3 +31,17 @@ own **runtime version**, which is the `version` in `app.json` (`runtimeVersion.p
 - Roll back by publishing the previous commit again, or `eas update:rollback`.
 
 First-time setup (once): `npx eas-cli login`, `npx eas-cli update:configure` (the project id and update URL are already in `app.json`).
+
+## Store builds from GitHub
+
+Actions → **release-build** → Run workflow. Choose `android` (builds the `.aab` for Google Play), `ios` (the `.ipa`
+for App Store / TestFlight) or `all`. The files appear under the run's **Artifacts**. Tick *submit* to also upload to the
+stores. It type-checks and runs the tests first, and builds on EAS, so no Mac or Android SDK is needed.
+
+One-time setup:
+1. Repository secret `EXPO_TOKEN` (expo.dev → Account settings → Access tokens).
+2. Android: run `npx eas-cli build -p android --profile production` once on your computer so EAS can create the signing key
+   (non-interactive CI cannot create it). Keep the key backed up in the EAS dashboard.
+3. iOS: needs a paid Apple Developer account. Run `npx eas-cli build -p ios --profile production` once and sign in when asked,
+   so EAS can create the certificate and provisioning profile.
+4. For *submit*: add the Google Play service-account key (`eas credentials`) and the App Store Connect API key.

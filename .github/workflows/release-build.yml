@@ -1,0 +1,99 @@
+name: release-build
+
+# Builds the store binaries on EAS and attaches them to the run:
+#   Android -> .aab (Google Play)
+#   iOS     -> .ipa (App Store / TestFlight)
+# Manual only, so a push never spends EAS build credits by accident.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        options: [all, android, ios]
+        default: all
+      submit:
+        description: Submit to the stores after a successful build
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android-aab:
+    if: inputs.platform == 'all' || inputs.platform == 'android'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm test -- --ci
+      - name: Build AAB on EAS
+        run: eas build --platform android --profile production --non-interactive --json > build.json
+      - name: Download AAB
+        run: |
+          url=$(jq -r '.[0].artifacts.buildUrl' build.json)
+          test -n "$url" -a "$url" != null
+          curl -fsSL "$url" -o thandra-selfdrive.aab
+      - uses: actions/upload-artifact@v4
+        with:
+          name: thandra-android-aab
+          path: thandra-selfdrive.aab
+          if-no-files-found: error
+          retention-days: 30
+      - name: Submit to Google Play
+        if: inputs.submit
+        run: eas submit --platform android --profile production --latest --non-interactive
+
+  ios-ipa:
+    if: inputs.platform == 'all' || inputs.platform == 'ios'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm test -- --ci
+      - name: Build IPA on EAS
+        run: eas build --platform ios --profile production --non-interactive --json > build.json
+      - name: Download IPA
+        run: |
+          url=$(jq -r '.[0].artifacts.buildUrl' build.json)
+          test -n "$url" -a "$url" != null
+          curl -fsSL "$url" -o thandra-selfdrive.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: thandra-ios-ipa
+          path: thandra-selfdrive.ipa
+          if-no-files-found: error
+          retention-days: 30
+      - name: Submit to App Store Connect
+        if: inputs.submit
+        run: eas submit --platform ios --profile production --latest --non-interactive
