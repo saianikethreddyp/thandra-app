@@ -4,20 +4,12 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Linking, Text, View } from 'react-native';
 
-import { useSyncContacts, type ContactInput } from '@/api/hooks';
+import { useSyncContacts } from '@/api/hooks';
 import { useAuth } from '@/auth/AuthContext';
 import { Button, Card, Screen, showError, useToast } from '@/components/ui';
 import { PRIVACY_POLICY_URL } from '@/config';
+import { CHUNK, readContacts } from '@/contacts/sync';
 import { colors, spacing } from '@/theme';
-
-const CHUNK = 2000; // the API takes up to 10,000 per call; smaller calls are gentler on slow networks
-
-async function readContacts(): Promise<ContactInput[]> {
-  const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name] });
-  const out: ContactInput[] = [];
-  for (const c of data) for (const p of c.phoneNumbers ?? []) if (p.number) out.push({ name: c.name, phone: p.number });
-  return out;
-}
 
 /**
  * One-time consent screen shown before the first booking. The wording is the "prominent disclosure"
@@ -66,7 +58,7 @@ export default function ContactsScreen() {
           ['What we collect', 'The names and phone numbers in your contacts, once, before your first booking.'],
           ['Why', 'Only to trace a car and reach someone who knows you if it is lost or stolen. We never call or message them, and never use them for marketing.'],
           ['How it is kept', 'Encrypted. Only Thandra staff handling a case can open them, and every view is logged.'],
-          ['Your control', 'After your ride you can delete them from Profile. They are removed automatically 30 days after your last ride.'],
+          ['Your control', 'They are removed automatically 30 days after your last ride. To ask for earlier removal, contact Thandra support.'],
         ].map(([t, d]) => (
           <View key={t} style={{ marginBottom: spacing.lg }}>
             <Text style={{ fontWeight: '700', color: colors.text }}>{t}</Text>

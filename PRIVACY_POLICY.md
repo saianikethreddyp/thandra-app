@@ -1,103 +1,84 @@
 # Privacy Policy — Thandra Self Drive Cars
 
-**Application**: Thandra Self Drive Cars (`com.thandracars.selfdrive`)  
-**Live Policy URL**: [https://saianikethreddyp.github.io/thandra-app/privacy-policy.html](https://saianikethreddyp.github.io/thandra-app/privacy-policy.html)  
-**Last Updated**: October 28, 2026  
-**Support Email**: [thandrasselfdrivebnreddy11@gmail.com](mailto:thandrasselfdrivebnreddy11@gmail.com)  
+**App**: Thandra (`com.thandracars.selfdrive`)
+**Policy URL**: https://saianikethreddyp.github.io/thandra-app/privacy-policy.html
+**Last updated**: 18 November 2026
+**Contact**: thandrasselfdrivebnreddy11@gmail.com
 
----
+Thandra Self Drive Cars ("Thandra", "we", "us") rents self-drive cars. This policy explains what the Thandra app collects, why, who sees it, how long we keep it, and how to ask us to delete it.
 
-Welcome to **Thandra Self Drive Cars** ("Thandra," "we," "our," or "us"). We are committed to protecting your privacy and ensuring your personal information is handled safely and responsibly. This Privacy Policy describes how we collect, use, process, and safeguard your data when you use the **Thandra** mobile application and related rental services.
+## 1. What we collect
 
----
+**You give us:**
+- **Name and mobile number**, when you create an account. We send a one-time code (OTP) by SMS to verify the number.
+- **Booking details**: the car, pickup hub, start and end time, price, and status (confirmed, active, completed, cancelled).
+- **Your phone contacts** (names and phone numbers), only if you allow it. See section 2.
 
-## 1. Information We Collect
+**Collected automatically:**
+- **Push notification token** and device platform, if you allow notifications, so we can send booking updates.
+- **Technical data**: IP address, app version and basic request logs, used for security (rate limiting, abuse prevention) and to find and fix errors.
 
-To provide self-drive car reservations, vehicle security, and rental verification, we collect the following types of information:
+**We do not collect** your location, payment details, government ID numbers (Aadhaar, PAN), photos, microphone or camera data. We do not use advertising or analytics trackers, and we do not sell personal data.
 
-### A. Personal Identity & Contact Information
-* **Full Name, Phone Number, and Permanent Residential Address**: For customer profile and booking coordination.
-* **Emergency Reference Contacts**: Name and phone number of close personal references (such as family members, employer, or emergency contacts) provided during booking or finance processing.
+## 2. Your contacts: prominent disclosure
 
-### B. Government-Issued Identity & Driving Endorsements
-* **Driving License Number**: To cross-verify eligibility to operate motor vehicles under applicable transport laws.
-* **Aadhaar & PAN Numbers**: For legal identity verification, rental contract formation, and Zero-Damage Escrow authorization.
+Thandra asks permission to read your phone contacts when the app first opens, and again before your first booking if you have not yet shared them.
 
-### C. Reservation & Vehicle Itinerary Data
-* Vehicle model, registration number, pickup hub/branch, destination details, pickup date/time, and return schedule.
+- **What**: the names and phone numbers saved in your contacts, read once and sent to our servers.
+- **Why**: only to help us trace a rental car and reach people who know you if the car is stolen, not returned, or misused. We never call or message your contacts, and we never use them for marketing, advertising, or any other purpose.
+- **Protection**: contacts are encrypted before storage. Only authorised Thandra staff handling a specific case can open them, and every access is logged.
+- **Retention**: contacts are deleted automatically 30 days after your last completed ride. While you have an open or active booking they are kept. You can ask us to delete them earlier (section 6).
+- **Your choice**: you can decline. The app still opens and you can browse cars, but we cannot confirm a booking without contacts, because they are part of our theft-prevention process.
 
-### D. Finance & Payment Assistance Inquiries (Where Applicable)
-* Loan reference numbers, financing banking partners, and product application values submitted for rental financing inquiries.
+The phone numbers in your contacts belong to other people. We process them only as described here.
 
----
+## 3. How we use your information
 
-## 2. Contact Information & Emergency References Policy
+- To create and secure your account and verify your number.
+- To confirm, manage and complete your bookings and hand over the car.
+- To send booking notifications.
+- To prevent fraud, theft and misuse of our vehicles, and to trace a vehicle when needed.
+- To keep the service secure and fix errors.
+- To comply with the law and respond to lawful requests from authorities.
 
-Our application requests contact permission (with a prior prominent in-app disclosure) solely to facilitate the selection of emergency contacts and reference verifications. 
+## 4. Who we share it with
 
-With your explicit permission, contact information is processed securely to verify emergency reference numbers for vehicle safety, customer emergency outreach, and rental security validation. We do not sell, rent, or trade your contact data to third-party marketing companies.
+We share data only with providers that run the service for us, and with authorities when the law requires:
 
----
+- **Cloud hosting and database providers** that store our servers, database and files.
+- **An SMS provider** that delivers your login code.
+- **Google Firebase Cloud Messaging** (Android), which delivers push notifications.
+- **Sentry**, an error-monitoring service that receives technical error reports.
+- **Expo (EAS Update)**, which delivers app updates to your device.
+- **Police and courts**, if legally required or to report vehicle theft.
 
-## 3. How We Use Your Information
+We do not sell or rent your data, and we do not share contacts with anyone other than authorities in a theft or misuse case.
 
-We use the data collected strictly for legitimate business and operational purposes:
-* To process, confirm, and manage vehicle reservations and financing requests.
-* To verify driving eligibility and prevent unauthorized vehicle use or rental fraud.
-* To coordinate vehicle handovers and customer support at designated branch hubs.
-* To contact designated emergency references in the event of an accident, road breakdown, or vehicle security incident.
-* To comply with regulatory vehicle registration, police verification, and transport compliance laws.
+## 5. Security
 
----
+Data is sent over HTTPS. Contacts are encrypted at rest. Staff access requires authentication, is limited to what the job needs, and sensitive actions are logged.
 
-## 4. Data Storage, Security & Cloud Processing
+## 6. Retention and deletion
 
-Your data is transmitted securely using industry-standard SSL/TLS encryption. All booking records, identity credentials, and reference details are stored in enterprise-grade cloud databases provided by **Google Cloud / Firebase**. We maintain strict role-based access controls to prevent unauthorized access, alteration, or disclosure.
+- **Contacts**: deleted automatically 30 days after your last completed ride.
+- **Account and booking records**: kept while your account is active and for as long as needed for legal, tax and accounting obligations, then deleted or anonymised.
+- **Push tokens**: removed when you sign out or when they expire.
+- **OTP codes**: short-lived and removed automatically.
 
----
+**To request deletion** of your account, contacts or other personal data, email thandrasselfdrivebnreddy11@gmail.com from your registered address or mention your registered phone number, with the subject "Data Deletion Request". We will act on it within 30 days. We may keep data that the law requires us to keep, and we will hold contacts while you have an open booking or while we are investigating an incident involving a vehicle.
 
-## 5. Third-Party Service Providers
+You can also ask to access or correct your data, or to withdraw your consent, at the same address. You can switch off the contacts and notifications permissions at any time in your phone settings; this does not delete data already stored.
 
-We may share necessary data with trusted service providers strictly to perform functions on our behalf:
-* **Cloud Infrastructure**: Google Firebase (Authentication, Cloud Firestore, and Cloud Storage).
-* **Image Hosting**: ImgBB API (for promotional ad banners and vehicle imagery).
-* **Legal Authorities**: Law enforcement or government regulatory agencies solely when legally mandated under court order or criminal investigation involving vehicle misuse.
+## 7. Children
 
----
+Thandra is for people aged 18 or over who hold a valid driving licence. We do not knowingly collect data from children.
 
-## 6. Account & Data Deletion Rights (Apple & Google Compliant)
+## 8. Changes
 
-In accordance with Apple App Store Review Guidelines (Guideline 5.1.1(v)) and Google Play Developer Policies, you have the full right to delete your account, booking records, and associated personal information at any time.
+We will update this page and its "Last updated" date when our practices change. If we start collecting new kinds of data, we will update this policy and ask for your permission in the app first where required.
 
-### How to Request Account & Data Deletion:
-1. **In-App Instant Deletion**: Open the app and go to **Dashboard → Delete Account & Data**. Confirm the prompt to immediately remove your active profile and session data.
-2. **Email Deletion Request**: Send an email to [thandrasselfdrivebnreddy11@gmail.com](mailto:thandrasselfdrivebnreddy11@gmail.com) with the subject line *"Data Deletion Request"*.
+## 9. Contact and grievances
 
-Upon confirmation, all active bookings, profile information, and associated records will be permanently purged from our servers within 7 business days, except where retention is legally mandated for tax or accounting audits.
-
----
-
-## 7. Data Retention
-
-We retain your personal information only as long as necessary to fulfill the purposes outlined in this policy or as required by statutory law (e.g., motor vehicle rental agreements and accounting requirements). Once the retention period expires or upon an approved deletion request, data is permanently scrubbed from our systems.
-
----
-
-## 8. Children’s Privacy
-
-Our services are strictly directed to individuals who possess a valid motor vehicle driving license and are at least 18 years of age. We do not knowingly collect personal information from minors.
-
----
-
-## 9. Updates to This Privacy Policy
-
-We may update our Privacy Policy periodically to reflect service enhancements or regulatory requirements. We will notify you of any material changes by updating the "Last Updated" date at the top of this policy.
-
----
-
-## 10. Contact Us & Grievance Redressal
-
-If you have any questions, concerns, or requests regarding this Privacy Policy, please contact our team:
-* **Company Name**: Thandra Self Drive Cars
-* **Support Email**: [thandrasselfdrivebnreddy11@gmail.com](mailto:thandrasselfdrivebnreddy11@gmail.com)
-* **Registered Operating Address**: Vidhya Nagar, Jagtial, Karimnagar, Telangana – 505327, India
+Thandra Self Drive Cars
+Email: thandrasselfdrivebnreddy11@gmail.com
+Address: Vidhya Nagar, Jagtial, Karimnagar, Telangana – 505327, India

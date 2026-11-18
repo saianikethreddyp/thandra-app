@@ -1,23 +1,30 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
+import { useCallback, useEffect, useState } from 'react';
 import { Linking, Text, View } from 'react-native';
 
-import { useContactsStatus, useDeleteContacts } from '@/api/hooks';
 import { useAuth } from '@/auth/AuthContext';
-import { Button, Card, confirm, EmptyState, Screen, SectionTitle, showError, useToast } from '@/components/ui';
+import { Button, Card, confirm, EmptyState, Screen, SectionTitle } from '@/components/ui';
 import { PRIVACY_POLICY_URL } from '@/config';
-import { unregisterPush } from '@/push/push';
+import { enableNotifications, notificationsAllowed, unregisterPush } from '@/push/push';
 import { colors, spacing } from '@/theme';
 import { dateOnly } from '@/utils/format';
 import { maskPhone } from '@/utils/phone';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const toast = useToast();
-  const { status, user, logout, reloadUser } = useAuth();
-  const contacts = useContactsStatus();
-  const del = useDeleteContacts();
+    const { status, user, logout } = useAuth();
+
+  const [notifOn, setNotifOn] = useState<boolean | null>(null);
+  const refreshNotif = useCallback(() => { notificationsAllowed().then(setNotifOn); }, []);
+  useEffect(refreshNotif, [refreshNotif]);
+
+  async function allowNotifications() {
+    if (await enableNotifications()) return setNotifOn(true);
+    setNotifOn(false);
+    Linking.openSettings(); // the OS will not ask again once denied
+  }
 
   const version = `v${Constants.expoConfig?.version ?? '?'}${Updates.updateId ? ` · ${Updates.updateId.slice(0, 8)}` : ''}`;
 
@@ -40,24 +47,12 @@ export default function ProfileScreen() {
     );
   }
 
-  async function deleteContacts() {
-    if (!(await confirm('Delete your contacts?', 'We will remove the contacts we stored. You will be asked again before your next booking.', 'Delete', true))) return;
-    try {
-      const res = await del.mutateAsync(undefined);
-      await reloadUser();
-      toast.show(`${res.deleted} contacts deleted`);
-    } catch (e) {
-      showError(e, 'Could not delete contacts');
-    }
-  }
-
   async function signOut() {
     if (!(await confirm('Sign out?', 'You can sign back in with your phone number.', 'Sign out'))) return;
     await unregisterPush();
     await logout();
   }
 
-  const c = contacts.data;
   return (
     <Screen>
       <Card>
@@ -66,17 +61,13 @@ export default function ProfileScreen() {
         <Text style={{ color: colors.muted, fontSize: 13, marginTop: 2 }}>Member since {dateOnly(user.created_at)}</Text>
       </Card>
 
-      <SectionTitle>Your contacts</SectionTitle>
+      <SectionTitle>Permissions</SectionTitle>
       <Card>
-        {c?.synced ? (
-          <>
-            <Text style={{ color: colors.text }}>{c.count} contacts stored securely{c.synced_at ? ` since ${dateOnly(c.synced_at)}` : ''}.</Text>
-            <Text style={{ color: colors.muted, fontSize: 13, marginTop: 4 }}>Used only to trace a car if it is lost or stolen.{c.can_delete ? '' : ' You can delete them once your current trip is over.'}</Text>
-            <Button label="Delete my contacts" variant="danger" onPress={deleteContacts} loading={del.isPending} disabled={!c.can_delete} style={{ marginTop: spacing.lg }} />
-          </>
-        ) : (
-          <Text style={{ color: colors.muted }}>No contacts stored. You will be asked once before your first booking.</Text>
-        )}
+        <Text style={{ fontWeight: '700', color: colors.text }}>Notifications</Text>
+        <Text style={{ color: colors.muted, fontSize: 13, marginTop: 2 }}>
+          {notifOn ? 'On. You will get updates about your bookings.' : 'Off. Allow them to hear about booking confirmations and ride updates.'}
+        </Text>
+        {notifOn ? null : <Button label="Allow notifications" icon="bell-outline" onPress={allowNotifications} style={{ marginTop: spacing.md }} />}
       </Card>
 
       <SectionTitle>About</SectionTitle>

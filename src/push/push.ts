@@ -39,3 +39,23 @@ export async function unregisterPush(): Promise<void> {
     // The server drops stale tokens on its own.
   }
 }
+
+/** True when the OS lets this app show notifications. */
+export async function notificationsAllowed(): Promise<boolean> {
+  try {
+    return (await Notifications.getPermissionsAsync()).granted;
+  } catch {
+    return false;
+  }
+}
+
+/** Asks the OS for notification permission (shows the system prompt if still undecided), then registers the token. */
+export async function enableNotifications(): Promise<boolean> {
+  try {
+    const res = await Notifications.requestPermissionsAsync();
+    if (res.granted) await registerForPush();
+    return res.granted;
+  } catch {
+    return false;
+  }
+}
