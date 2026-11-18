@@ -1,60 +1,33 @@
-# Thandra Self Drive Cars
+# Thandra Cars (customer app)
 
-A premium, production-ready React Native application for Thandra Self Drive Cars. This app includes a consumer-facing booking flow, a fully hidden administrative dashboard, and real-time Firestore synchronization.
+Expo SDK 58, expo-router, TanStack Query. Talks to the Thandra API (`EXPO_PUBLIC_API_URL`, default: the Render deployment).
 
-## Features
-
-- **Consumer Booking Flow:** Users can select a branch (Madhapur, Dilshuknagar, B.N reddy nagar, JNTU), enter trip details, and submit bookings.
-- **Smart Contacts Integration:** Securely captures emergency contacts directly from the device.
-- **Invisible Admin Panel:** A secret gateway hidden in the Splash Screen to access the admin dashboard.
-- **Command Center:** Real-time Firebase sync, advanced search/filtering (branch, date, keyword), and booking management (view contacts, delete bookings).
-- **Security Lockout:** 4-digit PIN protection that reads securely from Firestore, featuring a 4-attempt brute-force lockout.
-
-## Prerequisites
-
-Before running or deploying the app, ensure you have the following installed:
-- [Node.js](https://nodejs.org/en/) (LTS recommended)
-- [Expo CLI](https://docs.expo.dev/get-started/installation/)
-- [EAS CLI](https://docs.expo.dev/build/setup/) (for App Store deployment)
-
-## Setup & Local Development
-
-1. **Install Dependencies:**
-   ```bash
-   npm install
-   ```
-
-2. **Firebase Configuration:**
-   Ensure your Firebase configuration is correctly set up in `firebaseConfig.ts`. The app expects two collections in Firestore:
-   - `bookings`: Used to store all car reservations.
-   - `config`: Create a document here with ID `admin` and a field `pin` (string) to set your Admin Dashboard password.
-
-3. **Start the Development Server:**
-   ```bash
-   npx expo start
-   ```
-   Scan the QR code with the Expo Go app on your physical device, or press `i` / `a` to open in an emulator.
-
-## Accessing the Admin Panel
-
-The Admin Panel is completely invisible to normal users. To access it:
-1. Launch the app and view the initial Splash Screen.
-2. **Press and hold** the top area of the poster (near the Thandra logo) for **2 seconds**.
-3. Enter your 4-digit Admin PIN.
-
-## Deployment (EAS Build)
-
-The app's metadata (`app.json`) is fully preconfigured for Apple and Google, including the required Privacy Policy declarations for Contact access and premium app icons.
-
-**To build for Android (Play Store):**
-```bash
-eas build -p android
+```
+npm start          # dev server
+npm run typecheck
+npm test
 ```
 
-**To build for iOS (App Store):**
-```bash
-eas build -p ios
-```
+Push notifications and `expo-updates` need a development or production build, not Expo Go:
+`eas build --profile development --platform android`.
 
----
-*Built with ❤️ using React Native, Expo, and Firebase.*
+## Over-the-air (OTA) updates
+
+JS and asset changes ship without a store release through EAS Update. Each build only receives updates for its
+own **runtime version**, which is the `version` in `app.json` (`runtimeVersion.policy = appVersion`).
+
+| Build profile | Channel | Publish with |
+|---|---|---|
+| development | development | `eas update --channel development --message "..."` |
+| preview | preview | `npm run update:preview -- "what changed"` |
+| production | production | `npm run update:production -- "what changed"` |
+
+- The app checks on launch and whenever it returns to the foreground (at most every 10 minutes), downloads the update in
+  the background, and shows a "A new version is ready · Restart" banner. It also applies on the next launch.
+- Profile → footer shows `vX.Y.Z · <update id>` so you can tell which update a phone is running.
+- **Bump `version` in `app.json` whenever native code changes** (new native package, new permission, Expo SDK upgrade, plugin
+  change) and ship a new store build. Do not publish an OTA update for a native change: old binaries would get JS that
+  needs native code they don't have. Keeping the version unchanged for JS-only fixes keeps OTA working.
+- Roll back by publishing the previous commit again, or `eas update:rollback`.
+
+First-time setup (once): `npx eas-cli login`, `npx eas-cli update:configure` (the project id and update URL are already in `app.json`).

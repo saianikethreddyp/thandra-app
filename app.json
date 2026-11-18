@@ -3,23 +3,19 @@
     "name": "Thandra",
     "slug": "thandra-cars",
     "scheme": "thandra",
-    "version": "1.0.2",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.thandracars.selfdrive",
-      "buildNumber": "3",
       "infoPlist": {
-        "NSContactsUsageDescription": "Thandra requires access to contacts to allow selecting emergency contact references for vehicle booking safety.",
-        "NSPhotoLibraryUsageDescription": "Thandra requires access to your photo library to select ad images and verification documents.",
-        "NSCameraUsageDescription": "Thandra requires camera access to capture vehicle condition and verification documents."
+        "NSContactsUsageDescription": "Thandra asks to read your contacts once before your first booking. They are kept encrypted and used only to trace the car if it is stolen, and you can delete them after your ride."
       }
     },
     "android": {
       "package": "com.thandracars.selfdrive",
-      "versionCode": 3,
       "permissions": [
         "READ_CONTACTS"
       ],
@@ -29,15 +25,43 @@
       }
     },
     "plugins": [
-      "@react-native-community/datetimepicker",
+      "expo-router",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0F172A",
+          "imageWidth": 200
+        }
+      ],
+      "expo-secure-store",
+      "expo-font",
       "expo-asset",
-      "expo-font"
+      "expo-updates",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Thandra asks to read your contacts once before your first booking. They are kept encrypted and used only to trace the car if it is stolen, and you can delete them after your ride."
+        }
+      ],
+      "expo-notifications",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {
         "projectId": "59890691-1631-4b14-8a14-50eca52d2c33"
       }
     },
-    "owner": "anikethreddy"
+    "owner": "anikethreddy",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/59890691-1631-4b14-8a14-50eca52d2c33",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
+    }
   }
 }
