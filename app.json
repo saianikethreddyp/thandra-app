@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Thandra",
+    "slug": "thandra-cars",
+    "scheme": "thandra",
+    "version": "1.0.2",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.thandracars.selfdrive",
+      "buildNumber": "3",
+      "infoPlist": {
+        "NSContactsUsageDescription": "Thandra requires access to contacts to allow selecting emergency contact references for vehicle booking safety.",
+        "NSPhotoLibraryUsageDescription": "Thandra requires access to your photo library to select ad images and verification documents.",
+        "NSCameraUsageDescription": "Thandra requires camera access to capture vehicle condition and verification documents."
+      }
+    },
+    "android": {
+      "package": "com.thandracars.selfdrive",
+      "versionCode": 3,
+      "permissions": [
+        "READ_CONTACTS"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#121212",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      }
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      "expo-asset",
+      "expo-font",
+      "expo-status-bar"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "59890691-1631-4b14-8a14-50eca52d2c33"
+      }
+    },
+    "owner": "anikethreddy"
+  }
+}
