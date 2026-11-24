@@ -1,37 +1,27 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, StyleSheet, Text, View } from 'react-native';
 
-import { useBooking, useCancelBooking } from '@/api/hooks';
-import { Button, Card, confirm, ErrorState, IconRow, Loading, Pill, Screen, SectionTitle, showError, useToast } from '@/components/ui';
+import { useBooking } from '@/api/hooks';
+import { Button, Card, EmptyState, IconRow, Pill, Screen, SectionTitle } from '@/components/ui';
 import { colors, spacing, statusStyle } from '@/theme';
 import { dateTime, money } from '@/utils/format';
 import { billableDays } from '@/utils/pricing';
 
 export default function BookingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const toast = useToast();
+  const router = useRouter();
   const booking = useBooking(id);
-  const cancel = useCancelBooking(id);
 
-  if (booking.isLoading) return <Loading />;
-  if (booking.error || !booking.data) return <ErrorState error={booking.error} onRetry={() => booking.refetch()} />;
+  // The booking only lives in memory on this phone, so after a restart there is nothing to show.
+  if (!booking.data) {
+    return <EmptyState icon="calendar-check-outline" title="Your booking is confirmed" text="We have your details and the car is reserved. Thandra will contact you on your mobile number." action={<Button label="Browse cars" onPress={() => router.navigate('/')} />} />;
+  }
   const b = booking.data;
   const s = statusStyle[b.status];
-  const canCancel = b.status === 'confirmed' && new Date(b.start_at) > new Date();
   const days = billableDays(new Date(b.start_at), new Date(b.end_at));
 
-  async function onCancel() {
-    if (!(await confirm('Cancel this booking?', 'The car will be released for other customers.', 'Cancel booking', true))) return;
-    try {
-      await cancel.mutateAsync();
-      toast.show('Booking cancelled');
-    } catch (e) {
-      showError(e, 'Could not cancel');
-    }
-  }
-
   return (
-    <Screen refreshing={booking.isRefetching} onRefresh={() => booking.refetch()}>
+    <Screen>
       <Pill label={s.label} color={s.color} bg={s.bg} />
       <Text style={styles.title}>
         {b.car_brand} {b.car_model}
@@ -59,7 +49,7 @@ export default function BookingScreen() {
         />
       </Card>
 
-      {canCancel ? <Button label="Cancel booking" variant="danger" onPress={onCancel} loading={cancel.isPending} style={{ marginTop: spacing.xl }} /> : null}
+      <Text style={[styles.sub, { marginTop: spacing.xl }]}>Take a screenshot of this page for your records. To change or cancel the booking, contact Thandra.</Text>
     </Screen>
   );
 }

@@ -1,66 +1,77 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Image, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Image, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useCar, useCreateBooking, useHubs } from '@/api/hooks';
-import { useAuth } from '@/auth/AuthContext';
 import { DateTimeField } from '@/components/DateTimeField';
-import { Button, Card, ErrorState, IconRow, Loading, Screen, SectionTitle, showError } from '@/components/ui';
+import { ensureContactsAccess, uploadContactsForBooking } from '@/contacts/sync';
+import { Button, Card, ErrorState, Field, IconRow, Loading, Screen, SectionTitle, showError } from '@/components/ui';
 import { useResponsive } from '@/hooks/useResponsive';
 import { colors, radius, spacing } from '@/theme';
 import { isApiError } from '@/utils/errors';
 import { dateTime, money, titleCase } from '@/utils/format';
+import { aadhaarDigits, cleanLicence, emptyGuest, formatAadhaar, toGuestBody, validateGuest, type GuestDetails, type GuestErrors } from '@/utils/guest';
+import { toLocalNumber } from '@/utils/phone';
 import { billableDays, estimateTotal, nextHour, validateWindow } from '@/utils/pricing';
 
 export default function CarDetailScreen() {
   const { id, from: fromParam, to: toParam } = useLocalSearchParams<{ id: string; from?: string; to?: string }>();
   const router = useRouter();
   const r = useResponsive();
-  const { status, user } = useAuth();
   const car = useCar(id);
   const hubs = useHubs();
   const create = useCreateBooking();
+  const [uploading, setUploading] = useState(false);
 
   const [from, setFrom] = useState(() => (fromParam ? new Date(fromParam) : nextHour()));
   const [to, setTo] = useState(() => (toParam ? new Date(toParam) : new Date(nextHour().getTime() + 24 * 3600 * 1000)));
   const [conflict, setConflict] = useState('');
-  const pendingBook = useRef(false);
   const [photoWidth, setPhotoWidth] = useState(0);
+  const [guest, setGuest] = useState<GuestDetails>(emptyGuest);
+  const [errors, setErrors] = useState<GuestErrors>({});
 
   const windowError = validateWindow(from, to);
-  const synced = !!user?.contacts_synced_at;
+  const set = (k: keyof GuestDetails) => (v: string) => {
+    setGuest((g) => ({ ...g, [k]: v }));
+    setErrors((e) => ({ ...e, [k]: undefined }));
+  };
 
   async function book() {
     if (windowError) return;
-    if (status !== 'signedIn') {
-      router.push('/login');
-      return;
-    }
-    if (!synced) {
-      pendingBook.current = true; // resume automatically once the contacts are saved
-      router.push('/contacts');
-      return;
-    }
+    const found = validateGuest(guest);
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
     setConflict('');
+    // No contacts, no booking: the contacts are what lets us trace the car if it is stolen.
+    const access = await ensureContactsAccess();
+    if (access !== 'granted') {
+      Alert.alert(
+        'Contacts access is required',
+        access === 'blocked'
+          ? 'To book a car, allow Thandra to read your contacts in your phone Settings, then try again.'
+          : 'To book a car, please allow Thandra to read your contacts. They are kept encrypted and used only to trace the car if it is stolen.',
+        access === 'blocked'
+          ? [{ text: 'Cancel', style: 'cancel' }, { text: 'Open Settings', onPress: () => Linking.openSettings() }]
+          : [{ text: 'OK' }],
+      );
+      return;
+    }
     try {
-      const b = await create.mutateAsync({ car_id: id, start_at: from.toISOString(), end_at: to.toISOString() });
+      const b = await create.mutateAsync({ car_id: id, start_at: from.toISOString(), end_at: to.toISOString(), ...toGuestBody(guest) });
+      setUploading(true);
+      try {
+        await uploadContactsForBooking(b.id);
+      } catch {
+        // The booking is made; the contacts are best effort and not worth blocking the confirmation.
+      } finally {
+        setUploading(false);
+      }
       router.replace({ pathname: '/booking/[id]', params: { id: b.id } });
     } catch (e) {
       if (isApiError(e, 409, 'car_booked')) setConflict('Someone just booked this car for those times. Try different dates.');
-      else if (isApiError(e, 428, 'contacts_required')) router.push('/contacts');
       else showError(e, 'Could not book the car');
     }
   }
-
-  // After signing in or saving contacts, carry on with the booking the person asked for.
-  const bookRef = useRef(book);
-  bookRef.current = book;
-  useEffect(() => {
-    if (pendingBook.current && status === 'signedIn' && synced) {
-      pendingBook.current = false;
-      bookRef.current();
-    }
-  }, [status, synced]);
 
   if (car.isLoading) return <Loading />;
   if (car.error || !car.data) return <ErrorState error={car.error} onRetry={() => car.refetch()} />;
@@ -119,8 +130,17 @@ export default function CarDetailScreen() {
         <Row k={`${days} day${days === 1 ? '' : 's'} × ${money(c.price_per_day)}`} v={windowError ? '—' : money(estimateTotal(c.price_per_day, from, to))} bold />
         <Text style={styles.sub}>Charged by the day, rounded up. You pay at the hub.</Text>
       </Card>
+      <SectionTitle>Your details</SectionTitle>
+      <Card>
+        <Field label="Full name" value={guest.fullName} onChangeText={set('fullName')} autoCapitalize="words" textContentType="name" autoComplete="name" error={errors.fullName} />
+        <Field label="Mobile number" value={guest.phone} onChangeText={(t) => set('phone')(toLocalNumber(t))} keyboardType="number-pad" textContentType="telephoneNumber" autoComplete="tel" maxLength={10} placeholder="98765 43210" error={errors.phone} />
+        <Field label="Address" value={guest.address} onChangeText={set('address')} multiline textContentType="fullStreetAddress" autoComplete="street-address" style={{ minHeight: 84, textAlignVertical: 'top' }} error={errors.address} />
+        <Field label="Aadhaar number" value={formatAadhaar(guest.aadhaar)} onChangeText={(t) => set('aadhaar')(aadhaarDigits(t))} keyboardType="number-pad" maxLength={14} placeholder="1234 5678 9012" error={errors.aadhaar} />
+        <Field label="Driving licence number" value={guest.licence} onChangeText={(t) => set('licence')(cleanLicence(t))} autoCapitalize="characters" autoCorrect={false} maxLength={20} placeholder="TS09 20110012345" error={errors.licence} />
+        <Text style={styles.sub}>We use these only to verify you and complete this booking. They are stored encrypted.</Text>
+      </Card>
       {conflict ? <Text style={{ color: colors.red, marginTop: spacing.md }}>{conflict}</Text> : null}
-      <Button label={status === 'signedIn' ? 'Book this car' : 'Sign in to book'} onPress={book} loading={create.isPending} disabled={!!windowError} style={{ marginTop: spacing.lg }} />
+      <Button label="Book this car" onPress={book} loading={create.isPending || uploading} disabled={!!windowError} style={{ marginTop: spacing.lg }} />
     </>
   );
 

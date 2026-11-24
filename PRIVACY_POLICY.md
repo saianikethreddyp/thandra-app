@@ -48,7 +48,6 @@ We share data only with providers that run the service for us, and with authorit
 - **Cloud hosting and database providers** that store our servers, database and files.
 - **An SMS provider** that delivers your login code.
 - **Google Firebase Cloud Messaging** (Android), which delivers push notifications.
-- **Sentry**, an error-monitoring service that receives technical error reports.
 - **Expo (EAS Update)**, which delivers app updates to your device.
 - **Police and courts**, if legally required or to report vehicle theft.
 

@@ -59,3 +59,17 @@ export async function enableNotifications(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Runs every time the app opens: shows the phone's notification prompt if it has not been decided
+ * (the phone stops showing it once refused for good). It only asks; the phone is registered for
+ * push later, when customers have accounts.
+ */
+export async function askNotificationsOnOpen(): Promise<void> {
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (!current.granted && current.canAskAgain) await Notifications.requestPermissionsAsync();
+  } catch (e) {
+    if (__DEV__) console.warn('[notifications] could not ask for permission:', e);
+  }
+}

@@ -1,8 +1,9 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { skipToken, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { PAGE_SIZE } from '@/config';
 import { api } from './index';
 import type { Booking, Car, ContactsStatus, Hub, Page } from './types';
+import type { toGuestBody } from '@/utils/guest';
 
 // ---------------------------------------------------------------- browse (no login needed)
 
@@ -30,46 +31,25 @@ export const useCar = (id: string) => useQuery({ queryKey: ['car', id], queryFn:
 
 export const flatten = <T,>(pages?: { pages: Page<T>[] }) => pages?.pages.flatMap((p) => p.data) ?? [];
 
-// ---------------------------------------------------------------- bookings
+// ---------------------------------------------------------------- booking (no login yet)
 
-export function useMyBookings() {
-  return useInfiniteQuery({
-    queryKey: ['bookings'],
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) => api.request<Page<Booking>>('/v1/customer/bookings', { query: { limit: PAGE_SIZE, offset: pageParam } }),
-    getNextPageParam: (last) => (last.offset + last.data.length < last.total ? last.offset + last.limit : undefined),
-  });
-}
-
-export const useBooking = (id: string) => useQuery({ queryKey: ['booking', id], queryFn: () => api.request<Booking>(`/v1/customer/bookings/${id}`) });
-
-export type NewBooking = { car_id: string; start_at: string; end_at: string };
+export type NewBooking = { car_id: string; start_at: string; end_at: string } & ReturnType<typeof toGuestBody>;
 
 export function useCreateBooking() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: NewBooking) => api.request<Booking>('/v1/customer/bookings', { method: 'POST', body: input }),
+    mutationFn: (input: NewBooking) => api.request<Booking>('/v1/public/bookings', { method: 'POST', body: input, auth: false }),
     onSuccess: (b) => {
-      qc.setQueryData(['booking', b.id], b);
-      qc.invalidateQueries({ queryKey: ['bookings'] });
+      qc.setQueryData(['booking', b.id], b); // the confirmation screen reads it from here
       qc.invalidateQueries({ queryKey: ['cars'] }); // availability changed
     },
   });
 }
 
-export function useCancelBooking(id: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.request<Booking>(`/v1/customer/bookings/${id}/cancel`, { method: 'POST' }),
-    onSuccess: (b) => {
-      qc.setQueryData(['booking', id], b);
-      qc.invalidateQueries({ queryKey: ['bookings'] });
-      qc.invalidateQueries({ queryKey: ['cars'] });
-    },
-  });
-}
+/** The booking just made on this phone. Without an account it only lives in memory, so it is never fetched. */
+export const useBooking = (id: string) => useQuery<Booking>({ queryKey: ['booking', id], queryFn: skipToken });
 
-// ---------------------------------------------------------------- contacts
+// ---------------------------------------------------------------- contacts (parked until accounts return; nothing in the app calls these now)
 
 export const useContactsStatus = () => useQuery({ queryKey: ['contacts-status'], queryFn: () => api.request<ContactsStatus>('/v1/customer/contacts/status') });
 
@@ -89,8 +69,4 @@ export function useDeleteContacts() {
     mutationFn: (reason?: string) => api.request<{ deleted: number }>('/v1/customer/contacts/deletion', { method: 'POST', body: reason ? { reason } : {} }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts-status'] }),
   });
-}
-
-export function useUpdateName() {
-  return useMutation({ mutationFn: (name: string) => api.request('/v1/customer/me', { method: 'PATCH', body: { name } }) });
 }

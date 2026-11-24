@@ -25,8 +25,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={tab('Cars', 'car-side')} />
-      <Tabs.Screen name="bookings" options={tab('My bookings', 'calendar-check-outline')} />
-      <Tabs.Screen name="profile" options={tab('Profile', 'account-circle-outline')} />
+      <Tabs.Screen name="profile" options={tab('About', 'information-outline')} />
     </Tabs>
   );
 }

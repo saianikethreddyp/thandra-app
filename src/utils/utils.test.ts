@@ -1,5 +1,6 @@
 import { layoutFor } from '@/hooks/useResponsive';
 import { isValidIndianMobile, maskPhone, toLocalNumber } from './phone';
+import { emptyGuest, formatAadhaar, toGuestBody, validateGuest } from './guest';
 import { billableDays, estimateTotal, nextHour, validateWindow } from './pricing';
 
 const H = 3600 * 1000;
@@ -52,5 +53,31 @@ describe('responsive layout', () => {
     expect(layoutFor(390)).toMatchObject({ size: 'phone', columns: 1, contentWidth: 390, gutter: 16 });
     expect(layoutFor(768)).toMatchObject({ size: 'tablet', columns: 2, contentWidth: 720 });
     expect(layoutFor(1280)).toMatchObject({ size: 'large', columns: 3, contentWidth: 720 });
+  });
+});
+
+describe('guest details', () => {
+  const good = { fullName: ' Asha  Rao ', phone: '98765 43210', address: '12-3 Road No 4, Madhapur, Hyderabad', aadhaar: '2345 6789 0123', licence: 'ts09 2011-0012345' };
+
+  it('accepts good details and builds the API body', () => {
+    expect(validateGuest(good)).toEqual({});
+    expect(toGuestBody(good)).toEqual({
+      full_name: 'Asha Rao',
+      phone: '9876543210',
+      address: '12-3 Road No 4, Madhapur, Hyderabad',
+      aadhaar: '234567890123',
+      driving_licence: 'TS0920110012345',
+    });
+  });
+
+  it('flags every bad field', () => {
+    expect(Object.keys(validateGuest(emptyGuest)).sort()).toEqual(['aadhaar', 'address', 'fullName', 'licence', 'phone']);
+    expect(validateGuest({ ...good, aadhaar: '1234 5678 9012' }).aadhaar).toBeTruthy(); // cannot start with 0 or 1
+    expect(validateGuest({ ...good, phone: '12345' }).phone).toBeTruthy();
+  });
+
+  it('formats Aadhaar in groups of four', () => {
+    expect(formatAadhaar('234567890123')).toBe('2345 6789 0123');
+    expect(formatAadhaar('2345 67')).toBe('2345 67');
   });
 });
